@@ -19,6 +19,7 @@ mutable struct DayAheadModel <: StochasticHydroModel
     segments
     hours
     bids
+    blockbids
     blocks
     hours_per_block
 
@@ -84,6 +85,7 @@ end
 function define_model_indices(model::DayAheadModel)
     model.scenarios = collect(1:numscenarios(model))
     model.bids = collect(1:length(model.bidprices))
+    model.blockbids = collect(1:length(model.bidprices)-2)
     model.hours_per_block = [collect(h:ending) for h in model.hours for ending in model.hours[h+model.regulations.blockminlength-1:end]]
     model.blocks = collect(1:length(model.hours_per_block))
 end
@@ -124,6 +126,7 @@ function define_dep_problem(model::DayAheadModel)
     regulations = model.regulations
     scenarios = model.scenariodata
     bidprices = model.bidprices
+    blockbidprices = model.bidprices[2:end-1]
 
     # Define JuMP model
     # ========================================================
@@ -131,7 +134,7 @@ function define_dep_problem(model::DayAheadModel)
     # ========================================================
     @variable(internalmodel,xt_i[t = model.hours] >= 0)
     @variable(internalmodel,xt_d[i = model.bids, t = model.hours] >= 0)
-    @variable(internalmodel,xb[i = model.bids, b = model.blocks],lowerbound = 0, upperbound = regulations.blocklimit)
+    @variable(internalmodel,xb[i = model.blockbids, b = model.blocks],lowerbound = 0, upperbound = regulations.blocklimit)
     @variable(internalmodel,yt[s = model.scenarios, t = model.hours] >= 0)
     @variable(internalmodel,yb[s = model.scenarios, b = model.blocks] >= 0)
     @variable(internalmodel,z_up[s = model.scenarios, t = model.hours] >= 0)
@@ -171,12 +174,12 @@ function define_dep_problem(model::DayAheadModel)
                 )
     # Maximal bids
     @constraint(internalmodel,maxhourlybids[t = model.hours],
-                xt_i[t] + xt_d[model.bids[end],t] + sum(xb[i,b] for i = model.bids for b = find(A->in(t,A),model.hours_per_block)) <= 1.1*sum(params.H̅[p] for p in model.plants)
+                xt_i[t] + xt_d[model.bids[end],t] + sum(xb[i,b] for i = model.blockbids for b = find(A->in(t,A),model.hours_per_block)) <= 1.1*sum(params.H̅[p] for p in model.plants)
                 )
 
     # Bid-dispatch links
     ih(t,s) = findlast(bidprices .<= scenarios[s].ρ[t])
-    ib(b,s) = findlast(bidprices .<= scenarios[s].ρ̅[b])
+    ib(b,s) = findlast(blockbidprices .<= scenarios[s].ρ̅[b])
     @constraint(internalmodel,hourlybids[s = model.scenarios, t = model.hours],
                 yt[s,t] == ((scenarios[s].ρ[t] - bidprices[ih(t,s)])/(bidprices[ih(t,s)+1]-bidprices[ih(t,s)]))*xt_d[ih(t,s)+1,t]
                 + ((bidprices[ih(t,s)+1]-scenarios[s].ρ[t])/(bidprices[ih(t,s)+1]-bidprices[ih(t,s)]))*xt_d[ih(t,s),t]
@@ -273,9 +276,10 @@ function define_dep_structjump_problem(model::DayAheadModel)
     regulations = model.regulations
     scenarios = model.scenariodata
     bidprices = model.bidprices
+    blockbidprices = model.bidprices[2:end-1]
 
     ih(t,s) = findlast(bidprices .<= scenarios[s].ρ[t])
-    ib(b,s) = findlast(bidprices .<= scenarios[s].ρ̅[b])
+    ib(b,s) = findlast(blockbidprices .<= scenarios[s].ρ̅[b])
 
     # Define StructJuMP model
     # ========================================================
@@ -285,7 +289,7 @@ function define_dep_structjump_problem(model::DayAheadModel)
     # ========================================================
     @variable(internalmodel,xt_i[t = model.hours] >= 0)
     @variable(internalmodel,xt_d[i = model.bids, t = model.hours] >= 0)
-    @variable(internalmodel,xb[i = model.bids, b = model.blocks],lowerbound = 0, upperbound = regulations.blocklimit)
+    @variable(internalmodel,xb[i = model.blockbids, b = model.blocks],lowerbound = 0, upperbound = regulations.blocklimit)
     # Constraints
     # ========================================================
     # Increasing bid curve
@@ -294,7 +298,7 @@ function define_dep_structjump_problem(model::DayAheadModel)
                 )
     # Maximal bids
     @constraint(internalmodel,maxhourlybids[t = model.hours],
-                xt_i[t] + xt_d[model.bids[end],t] + sum(xb[i,b] for i = model.bids for b = find(A->in(t,A),model.hours_per_block)) <= 1.1*sum(params.H̅[p] for p in model.plants)
+                xt_i[t] + xt_d[model.bids[end],t] + sum(xb[i,b] for i = model.blockbids for b = find(A->in(t,A),model.hours_per_block)) <= 1.1*sum(params.H̅[p] for p in model.plants)
                 )
 
     # Second stage
@@ -423,6 +427,7 @@ function define_evp_problem(model::DayAheadModel)
     regulations = model.regulations
     scenario = expected(model.scenariodata)
     bidprices = model.bidprices
+    blockbidprices = model.bidprices[2:end-1]
 
     # Define JuMP model
     # ========================================================
@@ -430,7 +435,7 @@ function define_evp_problem(model::DayAheadModel)
     # ========================================================
     @variable(internalmodel,xt_i[t = model.hours] >= 0)
     @variable(internalmodel,xt_d[i = model.bids, t = model.hours] >= 0)
-    @variable(internalmodel,xb[i = model.bids, b = model.blocks], lowerbound = 0, upperbound = regulations.blocklimit)
+    @variable(internalmodel,xb[i = model.blockbids, b = model.blocks], lowerbound = 0, upperbound = regulations.blocklimit)
     @variable(internalmodel,yt[t = model.hours] >= 0)
     @variable(internalmodel,yb[b = model.blocks] >= 0)
     @variable(internalmodel,z_up[t = model.hours] >= 0)
@@ -471,12 +476,12 @@ function define_evp_problem(model::DayAheadModel)
 
     # Maximal bids
     @constraint(internalmodel,maxhourlybids[t = model.hours],
-                xt_i[t] + xt_d[model.bids[end],t] + sum(xb[i,b] for i = model.bids for b = find(A->in(t,A),model.hours_per_block)) <= 1.1*sum(params.H̅[p] for p in model.plants)
+                xt_i[t] + xt_d[model.bids[end],t] + sum(xb[i,b] for i = model.blockbids for b = find(A->in(t,A),model.hours_per_block)) <= 1.1*sum(params.H̅[p] for p in model.plants)
                 )
 
     # Bid-dispatch links
     ih(t) = findlast(bidprices .<= scenario.ρ[t])
-    ib(b) = findlast(bidprices .<= scenario.ρ̅[b])
+    ib(b) = findlast(blockbidprices .<= scenario.ρ̅[b])
     @constraint(internalmodel,hourlybids[t = model.hours],
                 yt[t] == ((scenario.ρ[t] - bidprices[ih(t)])/(bidprices[ih(t)+1]-bidprices[ih(t)]))*xt_d[ih(t)+1,t]
                 + ((bidprices[ih(t)+1]-scenario.ρ[t])/(bidprices[ih(t)+1]-bidprices[ih(t)]))*xt_d[ih(t),t]
@@ -584,7 +589,7 @@ end
 function production(model::DayAheadModel; variant = :dep)
     @assert status(model; variant = variant) == :Planned "Hydro model has not been planned yet"
 
-    return mean([production(model,scenario) for scenario in 1:numscenarios(model)])
+    return mean([production(model,scenario;variant=variant) for scenario in 1:numscenarios(model)])
 end
 
 function strategy(model::DayAheadModel; variant = :dep)

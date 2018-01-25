@@ -5,7 +5,9 @@ struct SingleOrder
     prices::AbstractVector              # Price dependent order prices
 end
 independent(order::SingleOrder) = order.independent_volume
-dependent(order::SingleOrder) = order.dependent_volumes
+dependent(order::SingleOrder) = order.dependent_volumes[2:end-1]
+lowertechnical(order::SingleOrder) = order.dependent_volumes[1]
+uppertechnical(order::SingleOrder) = order.dependent_volumes[end]
 
 struct BlockOrder
     interval::Tuple{Int64,Int64}   # Time range for block order
@@ -14,7 +16,7 @@ struct BlockOrder
 end
 
 struct OrderStrategy
-    horizon::Horizon                     # Planning horizon
+    horizon::Horizon                  # Planning horizon
     prices::AbstractVector            # Possible prices levels
 
     single_orders::Vector{SingleOrder}   # Order orders each hour
@@ -23,6 +25,7 @@ end
 
 function OrderStrategy(horizon::Horizon,regulations::TradeRegulations,prices::Vector{Float64},model::JuMPModel)
     @assert haskey(model.objDict,:xt_i) && haskey(model.objDict,:xt_d) && haskey(model.objDict,:xb) "Given JuMP model does not model order strategies"
+    blockprices = prices[2:end-1]
 
     xt_i = getvalue(model.objDict[:xt_i])
     xt_d = getvalue(model.objDict[:xt_d])
@@ -35,7 +38,7 @@ function OrderStrategy(horizon::Horizon,regulations::TradeRegulations,prices::Ve
     @assert hours(horizon) == JuMP.size(xt_d)[2] "Incorrect horizon of price dependent single orders"
     @assert length(hours_per_block) == JuMP.size(xb)[2] "Incorrect horizon of block orders"
     @assert length(prices) == JuMP.size(xt_d)[1] "Incorrect number of possible orders in price dependent single orders"
-    @assert length(prices) == JuMP.size(xb)[1] "Incorrect number of possible orders in block orders"
+    @assert length(blockprices) == JuMP.size(xb)[1] "Incorrect number of possible orders in block orders"
 
     # Accumulate orders per hour
     single_orders = Vector{SingleOrder}(hours(horizon))
@@ -45,7 +48,7 @@ function OrderStrategy(horizon::Horizon,regulations::TradeRegulations,prices::Ve
     end
 
     block_orders = Vector{BlockOrder}()
-    for (i,price) in enumerate(prices)
+    for (i,price) in enumerate(blockprices)
         for (j,interval) in enumerate(hours_per_block)
             ordervolume = xb[i,j]
             if ordervolume > 1e-6
@@ -86,7 +89,7 @@ function production(strategy::OrderStrategy,ρs::AbstractVector)
             p1 = single.prices[i-1]
             p2 = single.prices[i]
             if p1 <= ρ < p2 || p1 < ρ <= p2
-                H[h] += ((ρ - p1)/(p2 - p1))*dependent(single)[i] + ((p2 - ρ)/(p2 - p1))*dependent(single)[i-1]
+                H[h] += ((ρ - p1)/(p2 - p1))*single.dependent_volumes[i] + ((p2 - ρ)/(p2 - p1))*single.dependent_volumes[i-1]
                 break
             end
         end
@@ -97,6 +100,8 @@ function production(strategy::OrderStrategy,ρs::AbstractVector)
 end
 totalproduction(strategy::OrderStrategy,ρ::AbstractVector) = sum(production(strategy,ρ))
 
+revenue(strategy::OrderStrategy,ρs::AbstractVector) = production(strategy,ρs) .* ρs
+totalrevenue(strategy::OrderStrategy,ρs) = production(strategy,ρs) ⋅ ρs
 
 ## Print / Plot routines ##
 # ===================================================== #
@@ -132,7 +137,7 @@ end
 @recipe f(order::SingleOrder,ρs...) = (order,[ρs...])
 @recipe function f(order::SingleOrder,ρs::AbstractVector)
     hour = order.hour
-    orderincrement = mean(abs.(diff(order.prices)))
+    orderincrement = mean(abs.(diff(order.prices[2:end-1])))
     maxorder = max(order.independent_volume,maximum(order.dependent_volumes))
 
     line_v = []
@@ -156,12 +161,9 @@ end
                     push!(interp_p,[order.prices[v-1],order.prices[v]])
                 end
             else
-                if (v < length(order.dependent_volumes))
-                    # Vertical strip
-                    append!(line_v,fill(volume,2))
-                    price = [order.prices[v],order.prices[v+1]]
-                    append!(line_p,price)
-                end
+                append!(line_v,fill(volume,2))
+                price = [order.prices[v-1],order.prices[v]]
+                append!(line_p,price)
             end
         end
     end
@@ -186,15 +188,18 @@ end
 
     # Plot attributes
     xticks := linspace(0,maxorder,length(order.prices))
-    yticks := 0:orderincrement:order.prices[end]
+    yticks := 0:orderincrement:order.prices[end-1]
+    ylims := (-orderincrement,order.prices[end-1]+orderincrement)
     formatter := (d) -> @sprintf("%.2f",d)
     tickfont := font(14,"sans-serif")
 
     title := "Order Curve"
     xlabel := "Order Volume [MWh/h]"
     ylabel := "Price [EUR/MWh]"
+    tickfont := font(14,"sans-serif")
     guidefont := font(16,"sans-serif")
     titlefont := font(18,"sans-serif")
+    legendfont := font(16,"sans-serif")
 
     # Dashed line
     if !isempty(line_v)
@@ -209,7 +214,7 @@ end
 
     # Price independent order
     @series begin
-        markercolor --> :blue
+        markercolor --> :green
         markersize --> 8
         seriestype := :scatter
         label := "Price Independent Order"
@@ -262,10 +267,7 @@ end
 @recipe f(orders::Vector{SingleOrder},ρs...) = (orders,[ρs...])
 @recipe function f(orders::Vector{SingleOrder},ρs::AbstractVector; annotationfontsize = 12)
     prices = orders[1].prices
-    technicallow = prices[1]
-    technicalhigh = prices[end]
-    prices = prices[2:end-1]
-    orderincrement = mean(abs.(diff(prices)))
+    orderincrement = mean(abs.(diff(prices[2:end-1])))
     ρ_min = !isempty(ρs) ? minimum(ρs) : []
     ρ_max = !isempty(ρs) ? maximum(ρs) : []
     δρ = !isempty(ρs) ? mean(abs.(diff(ρs))) : []
@@ -304,17 +306,18 @@ end
         stop = 0.0
         splitfound = false
         if !isempty(ρs)
+            ρ = ρs[order.hour]
             for i = 2:length(order.dependent_volumes)
                 volume = order.dependent_volumes[i]
                 previous = order.dependent_volumes[i-1]
                 stop = order.prices[i]
-                ρ = ρs[order.hour]
                 if !splitfound && start <= ρ
                     if start <= ρ <= stop
                         interp_volume = ((ρ - start)/(stop - start))*volume + ((stop - ρ)/(stop - start))*previous
                         stop = ρ
                         start = 0
                         if abs(interp_volume) <= sqrt(eps())
+                            start = ρ
                             break
                         end
                         push!(accepted,length(dependent_bars)+1)
@@ -350,8 +353,7 @@ end
         end
     end
 
-    height = prices[end]+2*orderincrement
-
+    height = prices[end-1]+2*orderincrement
     # Independent Volume label
     push!(independent_bars,rect(25,-orderincrement,1.0,0.5*height))
     push!(ordervolumes,(25.5,0.25*height-orderincrement,text("Independent Volume [MWh]",font(annotationfontsize,"sans-serif",-π/2,:white))))
@@ -363,23 +365,21 @@ end
     # Plot attributes
     xticks := collect(0:24)
     xlims := (-1,26)
-    ylims --> (-orderincrement,prices[end]+orderincrement)
+    ylims --> (-orderincrement,prices[end-1]+orderincrement)
     if !isempty(ρs)
-        if δρ >= eps()
-            yticks := 0:mean([δρ,orderincrement]):prices[end]+orderincrement
-        else
-            yticks := []
-        end
+        yticks := 0:mean([δρ,orderincrement]):prices[end-1]+orderincrement
     else
         yticks := 0:orderincrement:prices[end]
     end
     tickfont := font(14,"sans-serif")
     guidefont := font(16,"sans-serif")
     titlefont := font(22,"sans-serif")
+    legendfont := font(16,"sans-serif")
+    legend := :topleft
     annotations := ordervolumes
     yformatter := (d) -> @sprintf("%.2f",d)
-    left_margin --> -50px
-    bottom_margin --> -30px
+    # left_margin --> -50px
+    # bottom_margin --> -30px
 
     title := "Single Orders"
     xlabel := "Hour"
@@ -461,29 +461,99 @@ function show(io::IO, order::BlockOrder)
     print(io,output)
 end
 
-@recipe function f(order::BlockOrder)
+@recipe f(order::BlockOrder) = order,[]
+@recipe function f(order::BlockOrder,ρs::AbstractVector; annotationfontsize = 14)
+    ρ_min = !isempty(ρs) ? minimum(ρs) : []
+    ρ_max = !isempty(ρs) ? maximum(ρs) : []
+    δρ = !isempty(ρs) ? mean(abs.(diff(ρs))) : []
+    p_max = order.price + δρ
+    highest = !isempty(ρs) ? max(p_max,ρ_max) : p_max
+    annotation_font = font(annotationfontsize,"sans-serif",:white)
+    formatter = (d) -> begin
+        if abs(d) <= sqrt(eps())
+            text("0.0",font(annotationfontsize,"sans-serif",:white))
+        elseif (log10(d) < -2.0 || log10(d) > 3.0)
+            text(@sprintf("%.2e",d),annotation_font)
+        elseif log10(d) > 2.0
+            text(@sprintf("%.1f",d),annotation_font)
+        else
+            text(@sprintf("%.2f",d),annotation_font)
+        end
+    end
+
+    price = order.price
     width = order.interval[2]-order.interval[1]
     height = order.price/10
-    annotation_font = font(11,"sans-serif",:white)
+    color = :red
+    status = "Rejected Order"
+    padding = !isempty(ρs) ? 1.5 : 2*(order.interval[2]-order.interval[1])/24
+
+    if !isempty(ρs)
+        ρ̅ = mean(ρs[order.interval[1]+1:order.interval[2]])
+        if order.price <= ρ̅
+            price = ρ̅
+            color = :green
+            status = "Accepted Order"
+        else
+            δρ *= 4
+        end
+    end
 
     # Plot attributes
-    xlims --> (-1,24)
-    ylims --> (0,2*order.price)
-    xticks --> [order.interval...]
-    yticks --> []
+    ylims := (0,2*price)
+    xticks := [order.interval...]
+    if !isempty(ρs)
+        xlims := -1:1:24
+        ylims := (ρ_min-δρ,highest+δρ)
+        if δρ >= eps()
+            yticks := ρ_min:δρ:highest+δρ
+        else
+            yticks := []
+        end
+    else
+        xlims := (order.interval[1]-1,order.interval[2]+1)
+        yticks := []
+    end
     title := "Block Order"
     tickfont := font(14,"sans-serif")
     guidefont := font(16,"sans-serif")
+    legendfont := font(16,"sans-serif")
     titlefont := font(22,"sans-serif")
+    title := "Block Order"
+    xlabel := "Hour"
+    ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""
     yformatter --> (d) -> @sprintf("%.2f",d)
-    annotations --> [(order.interval[1]+1,order.price,text(@sprintf("%.2f [EUR/MWh]",order.price),annotation_font)),
-                     (order.interval[2]-1,order.price,text(@sprintf("%.2f [MWh/h]",order.volume),annotation_font))]
+    annotations --> [(order.interval[1]+padding,price,text(@sprintf("%.2f [EUR/MWh]",order.price),annotation_font)),
+                     (order.interval[2]-padding,price,text(@sprintf("%.2f [MWh/h]",order.volume),annotation_font))]
 
-    @series begin
-        seriestype := :shape
-        seriescolor := :brown
-        label := ""
-        Shape(order.interval[1] + [0,width,width,0,0],order.price-height/2 + [0,0,height,height,0])
+    if !isempty(ρs)
+        # Accepted/Rejected orders
+        @series begin
+            seriestype := :shape
+            seriescolor := color
+            label := status
+            Shape(order.interval[1] + [0,width,width,0,0],price-height/2 + [0,0,height,height,0])
+        end
+        # Show the price curve
+        @series begin
+            seriestype := :scatter
+            seriescolor := :green
+            label := "Market price"
+            collect(0.5:1:23.5),ρs
+        end
+        @series begin
+            seriestype := :path
+            seriescolor := :green
+            label := ""
+            collect(0.5:1:23.5),ρs
+        end
+    else
+        @series begin
+            seriestype := :shape
+            seriescolor := :brown
+            label := ""
+            Shape(order.interval[1] + [0,width,width,0,0],order.price-height/2 + [0,0,height,height,0])
+        end
     end
 end
 
@@ -501,7 +571,9 @@ end
     sorted = sort(orders,by=(order)->order.price)
     annotation_font = font(annotationfontsize,"sans-serif",:white)
     formatter = (d) -> begin
-        if (log10(d) < -2.0 || log10(d) > 3.0)
+        if abs(d) <= sqrt(eps())
+            text("0.0",font(annotationfontsize,"sans-serif",:white))
+        elseif (log10(d) < -2.0 || log10(d) > 3.0)
             text(@sprintf("%.2e",d),annotation_font)
         elseif log10(d) > 2.0
             text(@sprintf("%.1f",d),annotation_font)
@@ -574,9 +646,11 @@ end
     yformatter := (d) -> @sprintf("%.2f",d)
     tickfont := font(14,"sans-serif")
     guidefont := font(16,"sans-serif")
+    legendfont := font(16,"sans-serif")
     titlefont := font(22,"sans-serif")
     title := "Block Orders"
     xlabel := "Hour"
+    ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""
     annotations --> orderinfos
 
     # Legend
@@ -665,9 +739,11 @@ end
     prices = strategy.prices
     orderincrement = mean(abs.(diff(prices)))
 
+    if !isempty(ρs)
+        legend := :topleft
+    end
     layout := (2,1)
     link := :x
-    bottom_margin --> -30px
 
     @series begin
         title := "Single Orders"

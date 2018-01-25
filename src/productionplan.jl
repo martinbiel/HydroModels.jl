@@ -144,28 +144,66 @@ function Base.mean(plans::Vector{ProductionPlan})
                           total_plan)
 end
 
-@recipe function f(plan::ProductionPlan)
+@recipe function f(plan::ProductionPlan; showHmax = false)
+    Hmin = minimum(plan.total_plan.H)
+    Hmax = showHmax ? sum([plan.modeldata.H̅[p] for p in plants(plan)]) : maximum(plan.total_plan.H)
+    increment = mean(abs.(diff(plan.total_plan.H)))
 
     linewidth --> 4
     linecolor --> :black
+    tickfont := font(14,"sans-serif")
+    guidefont := font(16,"sans-serif")
+    titlefont := font(22,"sans-serif")
+    xlabel := "Hour"
+    ylabel := "Energy Volume [MWh]"
+    xlims := (0,hours(plan.horizon))
+    ylims := (Hmin-increment,Hmax+increment)
     xticks := 0:1:hours(plan.horizon)
+    yticks := Hmin:increment:Hmax
+    yformatter := (d) -> @sprintf("%.2f",d)
 
     @series begin
-        plan.total_plan.H
+        label --> "H"
+        0:1:hours(plan.horizon),plan.total_plan.H
+    end
+
+    if showHmax
+        @series begin
+            label --> "Hmax"
+            linestyle --> :dash
+            linecolor --> :black
+            linewidth --> 2
+            0:1:hours(plan.horizon),fill(Hmax,hours(plan.horizon))
+        end
     end
 end
 
-@recipe function f(plan::ProductionPlan,plant::Plant)
+@recipe function f(plan::ProductionPlan,plant::Plant; showHmax = false)
     if !(plant in plants(plant))
         throw(ArgumentError(string("Selected plant ",hour," not in production plan")))
     end
+    Hmin = minimum(plan.total_plan.H)
+    Hmax = showHmax ? sum([plan.modeldata.H̅[p] for p in plants(plan)]) : maximum(plan.total_plan.H)
+    increment = std(plan.total_plan.H)
 
     linewidth --> 4
     linecolor --> :black
+    xlims := (-1,hours(horizon))
+    ylims := (Hmin-increment,Hmax+increment)
     xticks := 0:1:hours(plan.horizon)
+    yticks := Hmin:increment:Hmax
 
     @series begin
         plan.individual_plans[plant].H
+    end
+
+    if showHmax
+        @series begin
+            linestyle --> :dash
+            linecolor --> :black
+            linewidth --> 2
+            fill(plan.modeldata.H̅[plant],hours(plan.horizon))
+        end
     end
 end
 

@@ -1,51 +1,69 @@
-River = String
+River = Symbol
 Area = Int
 Plant = Symbol
 
-mutable struct HydroModelData
+struct PlantData{T <: AbstractFloat, S}
+    M₀::T                # Initial reservoir contents
+    M̅::T                 # Maximum reservoir capacities
+    H̅::T                 # Maximal production
+    Q̅::NTuple{S,T}       # Maximal discharge in each segment
+    μ::NTuple{S,T}       # Marginal production equivalents in each segment
+    S̱::T                 # Minimum spillage
+    Rqh::Int             # Discharge flow time in whole hours
+    Rqm::Int             # Discharge flow time in remaining minutes
+    Rsh::Int             # Spillage flow time in whole hours
+    Rsm::Int             # Spillage flow time in remaining minutes
+    Q̃::T                 # Yearly mean flow of each plant
+    V::T                 # Local inflow
+
+    function (::Type{PlantData})(M₀::AbstractFloat,M̅::AbstractFloat,H̅::AbstractFloat,Q̅::NTuple{S,<:AbstractFloat},μ::NTuple{S,<:AbstractFloat},S̱::AbstractFloat,Rgh::Integer,Rqm::Integer,Rsh::Integer,Rsm::Integer,Q̃::AbstractFloat,V::AbstractFloat) where S
+        T = promote_type(typeof(M₀),typeof(M̅),typeof(H̅),eltype(Q̅),eltype(μ),typeof(S̱),typeof(Q̃),typeof(V),Float32)
+        return new{T,S}(M₀,M̅,H̅,Q̅,μ,S̱,Rgh,Rqm,Rsh,Rsm,Q̃,V)
+    end
+end
+
+struct HydroModelData{T <: AbstractFloat, S}
     # Plants
     # ========================================================
-    plants       # All possible plant instances
-    rivers       # Plants sorted according to river
-    areas        # Plants sorted according to price area
+    plants::Vector{Plant}                   # All possible plant instances
+    rivers::Dict{River,Vector{Plant}}       # Plants sorted according to river
+    areas::Dict{Area,Vector{Plant}}         # Plants sorted according to price area
     # Parameters
     # ========================================================
-    M₀    # Initial reservoir contents
-    M̅     # Maximum reservoir capacities
-    H̅     # Maximal production
-    Q̅     # Maximal discharge in each segment
-    μ     # Marginal production equivalents in each segment
-    S̱     # Minimum spillage for each plant
-    Rqh   # Discharge flow time in whole hours
-    Rqm   # Discharge flow time in remaining minutes
-    Rsh   # Spillage flow time in whole hours
-    Rsm   # Spillage flow time in remaining minutes
-    Qd    # All discharge outlets located downstream (including itself)
-    Qu    # Discharge outlet(s) located directly upstream
-    Sd    # Spillage outlets located downstream (including itself)
-    Su    # Spillage outlet(s) located directly upstream
-    Qavg  # Yearly mean flow of each plant
-    V     # Local inflow
-    λ     # Expected price each hour
-    λ_f   # Expected future price
+    plantdata::Dict{Plant,PlantData{T,S}}   # Data for each plant
+    Qd::Dict{Plant,Vector{Plant}}           # All discharge outlets located downstream (including itself)
+    Qu::Dict{Plant,Vector{Plant}}           # Discharge outlet(s) located directly upstream
+    Sd::Dict{Plant,Vector{Plant}}           # Spillage outlets located downstream (including itself)
+    Su::Dict{Plant,Vector{Plant}}           # Spillage outlet(s) located directly upstream
 
-    function HydroModelData()
-        modeldata = new()
+    function HydroModelData(::Type{T},::Type{Segmenter{S}},plantfilename::String) where {T <: AbstractFloat, S}
+        modeldata = new{T,S}(Vector{Plant}(),
+                             Dict{River,Vector{Plant}}(),
+                             Dict{Area,Vector{Plant}}(),
+                             Dict{Plant,PlantData{T,S}}(),
+                             Dict{Plant,Vector{Plant}}(),
+                             Dict{Plant,Vector{Plant}}(),
+                             Dict{Plant,Vector{Plant}}(),
+                             Dict{Plant,Vector{Plant}}(),)
+        define_model_parameters(modeldata,plantfilename)
         return modeldata
     end
 end
 
+function HydroModelData(plant_filename::String)
+    return HydroModelData(Float64,Segmenter{2},plant_filename)
+end
+
 function define_plants!(modeldata::HydroModelData,plantnames::Vector{String})
-    modeldata.plants = Vector{Plant}()
     for plantname in plantnames
-        push!(modeldata.plants,Plant(strip(plantname)))
+        push!(modeldata.plants,Plant(filter(x->!isspace(x),plantname)))
     end
 end
 
-function define_rivers!(modeldata::HydroModelData,rivers::Vector{River})
-    modeldata.rivers = Dict{River,Vector{Plant}}()
-    for (p,river) in enumerate(rivers)
+function define_rivers!(modeldata::HydroModelData,rivernames::Vector{String})
+    for (p,rivername) in enumerate(rivernames)
         plant = modeldata.plants[p]
+        river = River(filter(x->!isspace(x),rivername))
         if !haskey(modeldata.rivers,river)
             modeldata.rivers[river] = Plant[]
         end
@@ -54,7 +72,6 @@ function define_rivers!(modeldata::HydroModelData,rivers::Vector{River})
 end
 
 function define_areas!(modeldata::HydroModelData,areas::Vector{Area})
-    modeldata.areas = Dict{Area,Vector{Plant}}()
     for (p,area) in enumerate(areas)
         plant = modeldata.plants[p]
         if !haskey(modeldata.areas,area)
@@ -66,7 +83,7 @@ end
 
 function define_plant_topology!(links::Dict{Plant,Plant},
                                 downstream_plants::Dict{Plant,Vector{Plant}},
-                                upstream_plants)
+                                upstream_plants::Dict{Plant,Vector{Plant}})
     linker = (downstream_plants, current, links ) -> begin
         if current == :NoLink
             return
@@ -85,17 +102,7 @@ function define_plant_topology!(links::Dict{Plant,Plant},
     end
 end
 
-function calculate_marginal_equivalents(Q̅,H̅)
-    Q̅s = [0.75*Q̅ 0.25*Q̅]
-    μs = zeros(2)
-    for i = 1:length(Q̅s)
-       μs[1] = H̅/(Q̅s[1] + 0.95*Q̅s[2])
-       μs[2] = 0.95*μs[1]
-    end
-    return Q̅s,μs
-end
-
-function calculate_inflow(plant,w,upstream_plants)
+function calculate_inflow(plant::Plant,w::Dict{Plant,<:AbstractFloat},upstream_plants::Vector{Plant})
     V = w[plant]
     if !isempty(upstream_plants)
         V -= sum(w[p] for p in upstream_plants)
@@ -103,23 +110,19 @@ function calculate_inflow(plant,w,upstream_plants)
     return V
 end
 
-function define_model_parameters(modeldata::HydroModelData,
+function define_model_parameters(modeldata::HydroModelData{T,S},
                                  plantnames::Vector{String},
-                                 Qlinks,
-                                 Slinks,
-                                 H̅,
-                                 Q̅,
-                                 S̱,
-                                 M̅,
-                                 yearlymeanflows,
-                                 Rq,
-                                 Rs,
-                                 rivers::Vector{River},
-                                 areas::Vector{Area},
-                                 pricedata)
-
-    @assert size(pricedata,1) == 24 || size(pricedata,1) == 168 "Prices should be defined daily or weekly"
-
+                                 Qlinks::Vector{Int},
+                                 Slinks::Vector{Int},
+                                 H̅::Vector{T},
+                                 Q̅::Vector{T},
+                                 S̱::Vector{T},
+                                 M̅::Vector{T},
+                                 Q̃::Vector{T},
+                                 Rq::Vector{Int},
+                                 Rs::Vector{Int},
+                                 rivers::Vector{String},
+                                 areas::Vector{Area}) where {T <: AbstractFloat, S}
     Vsf = 0.2278           # Scale factor for local inflow (0.2278)
     δ = 0.363              # Initial reservoir content factor (0.363)
     M_end = 0.89           # Target water level as factor of M_0 (0.89)
@@ -131,91 +134,68 @@ function define_model_parameters(modeldata::HydroModelData,
     define_rivers!(modeldata,rivers)
     define_areas!(modeldata,areas)
 
-    # Load/initialize modeldata parameters
-    modeldata.M₀ = Dict(zip(modeldata.plants,δ*M̅))
-    modeldata.M̅ = Dict(zip(modeldata.plants,M̅))
-    modeldata.H̅ = Dict(zip(modeldata.plants,H̅))
-    modeldata.Q̅ = Dict{Tuple{Plant,Int64},Float64}()
-    modeldata.μ = Dict{Tuple{Plant,Int64},Float64}()
-    modeldata.S̱ = Dict(zip(modeldata.plants,S̱))
-    modeldata.Rqh = Dict{Plant,Float64}()
-    modeldata.Rqm = Dict{Plant,Float64}()
-    modeldata.Rsh = Dict{Plant,Float64}()
-    modeldata.Rsm = Dict{Plant,Float64}()
-    modeldata.Qd = Dict{Plant,Vector{Plant}}()
-    modeldata.Qu = Dict{Plant,Vector{Plant}}()
-    modeldata.Sd = Dict{Plant,Vector{Plant}}()
-    modeldata.Su = Dict{Plant,Vector{Plant}}()
     for p in modeldata.plants
         modeldata.Qd[p] = Plant[]
         modeldata.Qu[p] = Plant[]
         modeldata.Sd[p] = Plant[]
         modeldata.Su[p] = Plant[]
     end
-    modeldata.Qavg = Dict(zip(modeldata.plants,Vsf*yearlymeanflows))
-    modeldata.V = Dict{Plant,Float64}()
 
-
+    # Define plant topologies
     links_as_plants(links) = Dict([(modeldata.plants[p],(l == 0 ? :NoLink : modeldata.plants[l])) for (p,l) in enumerate(links)])
-
     define_plant_topology!(links_as_plants(Qlinks), modeldata.Qd, modeldata.Qu)
     define_plant_topology!(links_as_plants(Slinks), modeldata.Sd, modeldata.Su)
 
-    for i in 1:length(plantnames)
-        p = modeldata.plants[i]
-        Q̅s,μs = calculate_marginal_equivalents(Q̅[i],H̅[i])
-        modeldata.Q̅[(p,1)] = Q̅s[1]
-        modeldata.Q̅[(p,2)] = Q̅s[2]
-        modeldata.μ[(p,1)] = μs[1]
-        modeldata.μ[(p,2)] = μs[2]
-        modeldata.Rqh[p] = floor(Int64,Rq[i]/60);
-        modeldata.Rqm[p] = mod(Rq[i],60);
-        modeldata.Rsh[p] = floor(Int64,Rs[i]/60);
-        modeldata.Rsm[p] = mod(Rs[i],60);
-        modeldata.V[p] = calculate_inflow(p,modeldata.Qavg,modeldata.Qu[p])
-    end
+    w = Dict(zip(modeldata.plants,Vsf*Q̃))
 
-    modeldata.λ = pricedata
-    modeldata.λ_f = mean(pricedata)
+    for i in 1:length(plantnames)
+        Q̅s,μs = segment(Segmenter{S},Q̅[i],H̅[i])
+        p = modeldata.plants[i]
+        V = calculate_inflow(p,w,modeldata.Qu[p])
+        modeldata.plantdata[p] = PlantData(δ*M̅[i],
+                                           M̅[i],
+                                           H̅[i],
+                                           Q̅s,
+                                           μs,
+                                           S̱[i],
+                                           floor(Int64,Rq[i]/60),
+                                           mod(Rq[i],60),
+                                           floor(Int64,Rs[i]/60),
+                                           mod(Rs[i],60),
+                                           Vsf*Q̃[i],
+                                           V)
+    end
 end
 
-function define_model_parameters(modeldata::HydroModelData, plantdata::Matrix, pricedata::Matrix)
+function define_model_parameters(modeldata::HydroModelData{T}, plantdata::Matrix) where T <: AbstractFloat
     @assert size(plantdata,2) == 12 "Invalid plant data format"
 
     define_model_parameters(modeldata,
-                            Vector{String}(plantdata[:,1]),
-                            plantdata[:,2],
-                            plantdata[:,3],
-                            plantdata[:,4],
-                            plantdata[:,5],
-                            plantdata[:,6],
-                            plantdata[:,7],
-                            plantdata[:,8],
-                            plantdata[:,9],
-                            plantdata[:,10],
-                            Vector{River}(plantdata[:,11]),
-                            Vector{Area}(plantdata[:,12]),
-                            pricedata)
+                            convert(Vector{String},plantdata[:,1]),
+                            convert(Vector{Int},plantdata[:,2]),
+                            convert(Vector{Int},plantdata[:,3]),
+                            convert(Vector{T},plantdata[:,4]),
+                            convert(Vector{T},plantdata[:,5]),
+                            convert(Vector{T},plantdata[:,6]),
+                            convert(Vector{T},plantdata[:,7]),
+                            convert(Vector{T},plantdata[:,8]),
+                            convert(Vector{Int},plantdata[:,9]),
+                            convert(Vector{Int},plantdata[:,10]),
+                            convert(Vector{String},plantdata[:,11]),
+                            convert(Vector{Area},plantdata[:,12]))
 end
 
-function define_model_parameters(modeldata::HydroModelData, plantfilename::String, pricefilename::String)
+function define_model_parameters(modeldata::HydroModelData, plantfilename::String)
     plantdata = readcsv(plantfilename)
-    pricedata = readcsv(pricefilename)
-    define_model_parameters(modeldata,plantdata[2:end,:],pricedata[2:end,:])
-end
-
-function HydroModelData(plantfilename::String, pricefilename::String)
-    modeldata = HydroModelData()
-    define_model_parameters(modeldata,plantfilename,pricefilename)
-    return modeldata
+    define_model_parameters(modeldata,plantdata[2:end,:])
 end
 
 function plants_in_river(modeldata::HydroModelData,river::River)
-    if river == "All"
+    if river == :All
         return modeldata.plants
     end
     if !haskey(modeldata.rivers,river)
-        warn(string("Invalid river name: ",river))
+        warn(string("Invalid river name: ", river))
         return Plant[]
     end
     return modeldata.rivers[river]

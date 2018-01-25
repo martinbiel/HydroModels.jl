@@ -8,6 +8,7 @@ using JuMP
 using StructJuMP
 using Clp
 using RecipesBase
+using Parameters
 
 import MathProgBase.SolverInterface.AbstractMathProgSolver
 import MathProgBase.SolverInterface.status
@@ -42,14 +43,15 @@ JuMPVariable = JuMP.Variable
 
 # Include files
 include("horizon.jl")
+include("segmenter.jl")
 include("modeldata.jl")
 include("productionplan.jl")
-include("DayAhead.jl")
-include("orderstrategy.jl")
 include("model.jl")
 include("deterministic.jl")
 include("stochastic.jl")
-include("shortterm.jl")
-include("dayaheadmodel.jl")
+
+# Models
+include("day-ahead/DayAhead.jl")
+include("short-term/short_term_model.jl")
 
 end # module

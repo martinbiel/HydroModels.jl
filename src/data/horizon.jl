@@ -7,26 +7,31 @@ struct Horizon
     end
 end
 
+Base.:(==)(h1::Horizon,h2::Horizon) = h1.nhours == h2.nhours
+Base.:(<=)(h1::Horizon,h2::Horizon) = h1.nhours <= h2.nhours
+Base.:(>=)(h1::Horizon,h2::Horizon) = h1.nhours >= h2.nhours
+
 Day() = Horizon(24)
 Days(ndays::Integer) = Horizon(ndays*24)
 Week() = Horizon(168)
 Weeks(nweeks::Integer) = Horizon(nweeks*168)
 
-hours(horizon::Horizon) = horizon.nhours
-days(horizon::Horizon) = div(horizon.nhours,24)
-weeks(horizon::Horizon) = div(horizon.nhours,168)
+nhours(horizon::Horizon) = horizon.nhours
+ndays(horizon::Horizon) = div(horizon.nhours,24)
+nweeks(horizon::Horizon) = div(horizon.nhours,168)
 
 function horizonstring(horizon::Horizon)
-    remaindays = div(mod(hours(horizon),168),24)
+    remaindays = div(mod(nhours(horizon),168),24)
     horizonstr = ""
-    if weeks(horizon) > 0
-        horizonstr *= string("(",weeks(horizon)," week")
-        if weeks(horizon) > 1
+    weeks = nweeks(horizon)
+    if weeks > 0
+        horizonstr *= string("(",weeks," week")
+        if weeks > 1
             horizonstr *= "s"
         end
     end
     if remaindays > 0
-        if weeks(horizon) > 0
+        if weeks > 0
             horizonstr *= string(", ",remaindays," day")
         else
             horizonstr *= string("(",remaindays," day")

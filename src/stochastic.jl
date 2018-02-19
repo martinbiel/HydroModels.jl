@@ -1,8 +1,8 @@
 Scenario = Int
 
-abstract type StochasticHydroModel <: HydroModel end
+abstract type StochasticHydroModel <: AbstractHydroModel end
 
-function show(io::IO, model::StochasticHydroModel)
+function Base.show(io::IO, model::StochasticHydroModel)
     if get(io, :multiline, false)
         print(io,string("Stochastic Hydro Power Model : ",modelname(model),", including ",length(model.plants)," power stations, over a ",hours(model.horizon)," hour horizon ",horizonstring(model.horizon))," featuring ",numscenarios(model)," scenarios")
     else

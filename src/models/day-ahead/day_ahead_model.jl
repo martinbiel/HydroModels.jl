@@ -1,4 +1,4 @@
-mutable struct DayAheadModel <: StochasticHydroModel
+mutable struct DayAheadModel{T <: AbstractFloat, S} <: StochasticHydroModel
     # Parameters
     # ========================================================
     horizon::Horizon           # Time horizon to simulate
@@ -7,10 +7,10 @@ mutable struct DayAheadModel <: StochasticHydroModel
 
     # Model data
     # ========================================================
-    modeldata::HydroModelData
-    regulations::TradeRegulations
-    scenariodata::Vector{DayAheadScenario}
-    bidprices::AbstractVector
+    modeldata::HydroModelData{T,S}
+    regulations::TradeRegulations{T}
+    scenariodata::Vector{DayAheadScenario{T}}
+    bidprices::Vector{T}
 
     # Model indices
     # ========================================================

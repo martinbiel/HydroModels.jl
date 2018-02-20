@@ -17,7 +17,7 @@ function ShortTermData(plantfilename::String,pricecurve::PriceCurve)
     ShortTermData(HydroPlantCollection(plantfilename),pricecurve)
 end
 
-function modelindices(data::ShortTermData,horizon::Horizon,areas::Vector{Area},rivers::Vector{River})
+function modelindices(horizon::Horizon,data::ShortTermData,areas::Vector{Area},rivers::Vector{River})
     hours = collect(1:nhours(horizon))
     plants = plants_in_areas_and_rivers(data.plantdata,areas,rivers)
     if isempty(plants)
@@ -27,15 +27,13 @@ function modelindices(data::ShortTermData,horizon::Horizon,areas::Vector{Area},r
     return ShortTermIndices(hours, plants, segments)
 end
 
-@hydromodel ShortTerm = begin
+@hydromodel Deterministic ShortTerm = begin
     @unpack hours, plants, segments = indices
     hdata = data.plantdata
     λ = data.pricecurve
     λ̄ = expected(λ)
     HydroModels.horizon(λ) >= horizon || error("Not enough price data for chosen horizon")
 
-    # Define JuMP model
-    # ========================================================
     # Variables
     # ========================================================
     @variable(model, Q[p = plants, s = segments, t = hours], lowerbound = 0, upperbound = hdata[p].Q̄[s])
@@ -81,7 +79,6 @@ end
                 )
 
     # Water flow
-    # Discharge flow
     @constraintref Qflow[1:length(plants),1:nhours(horizon)]
     @constraintref Sflow[1:length(plants),1:nhours(horizon)]
     for (pidx,p) = enumerate(plants)
@@ -120,7 +117,7 @@ end
         end
     end
 
-    # Production
+    # Power production
     @constraint(model,production[t = hours],
                 H[t] == sum(hdata[p].μ[s]*Q[p,s,t]
                             for p = plants, s = segments)

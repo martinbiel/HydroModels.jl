@@ -2,7 +2,7 @@ module HydroModels
 
 # Packages
 using JuMP
-using StructJuMP
+using StochasticPrograms
 using Clp
 using RecipesBase
 using Parameters
@@ -41,7 +41,7 @@ JuMPModel = JuMP.Model
 JuMPVariable = JuMP.Variable
 
 # Include files
-include("data/modeldata.jl")
+include("data/data.jl")
 #include("productionplan.jl")
 include("models/model.jl")
 include("stochastic.jl")

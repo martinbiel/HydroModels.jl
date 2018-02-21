@@ -44,10 +44,10 @@ JuMPVariable = JuMP.Variable
 include("data/data.jl")
 #include("productionplan.jl")
 include("models/model.jl")
-include("stochastic.jl")
 
 # Models
 #include("day-ahead/DayAhead.jl")
 include("models/short-term/short_term_model.jl")
+include("models/day-ahead/DayAhead.jl")
 
 end # module

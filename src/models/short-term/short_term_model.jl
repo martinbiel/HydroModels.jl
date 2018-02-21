@@ -27,6 +27,8 @@ function modelindices(horizon::Horizon,data::ShortTermData,areas::Vector{Area},r
     return ShortTermIndices(hours, plants, segments)
 end
 
+# @deterministic_hydro ShortTerm = begin
+
 @hydromodel Deterministic ShortTerm = begin
     @unpack hours, plants, segments = indices
     hdata = data.plantdata
@@ -78,7 +80,7 @@ end
                 - S[p,t]
                 )
 
-    # Water flow
+    # Water flow: Discharge + Spillage
     @constraintref Qflow[1:length(plants),1:nhours(horizon)]
     @constraintref Sflow[1:length(plants),1:nhours(horizon)]
     for (pidx,p) = enumerate(plants)
@@ -118,15 +120,15 @@ end
     end
 
     # Power production
-    @constraint(model,production[t = hours],
+    @constraint(model, production[t = hours],
                 H[t] == sum(hdata[p].μ[s]*Q[p,s,t]
                             for p = plants, s = segments)
                 )
 end
 
-ShortTermModel(modeldata::AbstractModelData,horizon::Horizon,area::Area,river::River) = ShortTermModel(modeldata,horizon,[area],[river])
-ShortTermModel(modeldata::AbstractModelData,horizon::Horizon,area::Area) = ShortTermModel(modeldata,horizon,[area],[:All])
-ShortTermModel(modeldata::AbstractModelData,horizon::Horizon,areas::Vector{Area}) = ShortTermModel(modeldata,horizon,areas,[:All])
-ShortTermModel(modeldata::AbstractModelData,horizon::Horizon,river::River) = ShortTermModel(modeldata,horizon,[0],[river])
-ShortTermModel(modeldata::AbstractModelData,horizon::Horizon,rivers::Vector{River}) = ShortTermModel(modeldata,horizon,[0],rivers)
-ShortTermModel(modeldata::AbstractModelData,horizon::Horizon) = ShortTermModel(modeldata,horizon,[0],[:All])
+ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,area::Area,river::River) = ShortTermModel(horizon,modeldata,[area],[river])
+ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,area::Area) = ShortTermModel(horizon,modeldata,[area],[:All])
+ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,areas::Vector{Area}) = ShortTermModel(horizon,modeldata,areas,[:All])
+ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,river::River) = ShortTermModel(horizon,modeldata,[0],[river])
+ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,rivers::Vector{River}) = ShortTermModel(horizon,modeldata,[0],rivers)
+ShortTermModel(horizon::Horizon,modeldata::AbstractModelData) = ShortTermModel(horizon,modeldata,[0],[:All])

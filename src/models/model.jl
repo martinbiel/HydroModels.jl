@@ -102,7 +102,7 @@ function status(hydromodel::StochasticHydroModel; variant = :rp)
     return hydromodel.status[variant]
 end
 
-nscenarios(hydromodel::StochasticHydroModel) = length(hydromodel.scenariodata)
+nscenarios(hydromodel::StochasticHydroModel) = length(hydromodel.scenarios)
 
 function define_problem!(hydromodel::StochasticHydroModel)
     model = StochasticProgram(hydromodel.scenarios)
@@ -159,7 +159,7 @@ macro hydromodel(variant,def)
                 status::Symbol
                 internalmodel::JuMP.Model
 
-                function (::$(esc(:Type)){$(esc(modelname))})(data::AbstractModelData,horizon::Horizon,args...)
+                function (::$(esc(:Type)){$(esc(modelname))})(horizon::Horizon,data::AbstractModelData,args...)
                     D = typeof(data)
                     generator = ($(esc(:model)),$(esc(:horizon)),$(esc(:data)),$(esc(:indices))) -> begin
                         $(esc(modeldef))
@@ -186,7 +186,7 @@ macro hydromodel(variant,def)
                 status::Dict{Symbol,Symbol}
                 internalmodel::JuMP.Model
 
-                function (::$(esc(:Type)){$(esc(modelname))})(data::AbstractModelData,horizon::Horizon,args...)
+                function (::$(esc(:Type)){$(esc(modelname))})(horizon::Horizon,data::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},args...)
                     D = typeof(data)
                     generator = ($(esc(:model)),$(esc(:horizon)),$(esc(:data)),$(esc(:indices))) -> begin
                         $(esc(modeldef))

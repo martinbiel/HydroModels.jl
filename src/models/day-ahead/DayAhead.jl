@@ -19,31 +19,55 @@ struct DayAheadIndices <: AbstractModelIndices
     blocks::Vector{Int}
     hours_per_block::Vector{Vector{Int}}
 end
-plants(indices::ShortTermIndices) = indices.plants
+plants(indices::DayAheadIndices) = indices.plants
 
-struct DayAheadData{T <: AbstractFloat}
-    plantdata::HydroModelData{T,2}
-    pricedata::PriceData{T}
+struct DayAheadData{T <: AbstractFloat} <: AbstractModelData
+    plantdata::HydroPlantCollection{T,2}
     regulations::TradeRegulations{T}
     bidprices::Vector{T}
+    λ̄::T
 
-    function (::Type{DayAheadData})(plantdata::HydroPlantCollection{T,2},pricedata::PriceData{T},regulations::TradeRegulations{T},bidprices::Vector{T}) where T <: AbstractFloat
-        return new{T}(plantdata,pricedata,regulations,bidprices)
+    function (::Type{DayAheadData})(plantdata::HydroPlantCollection{T,2},regulations::TradeRegulations{T},bidprices::Vector{T},λ̄::T) where T <: AbstractFloat
+        return new{T}(plantdata,regulations,bidprices,λ̄)
     end
 end
-function DayAheadData(plantfilename::String,pricefilename::PriceCurve)
+function DayAheadData(plantfilename::String,pricefilename::String,λ̱::AbstractFloat,λ̄::AbstractFloat)
     regulations = NordPoolRegulations()
-    ShortTermData(HydroPlantCollection(plantfilename),PriceData(pricefilename),regulations,bidprices(regulations))
-end
-
-function bidprices(pricedata::Pricedata,regulations::TradeRegulations)
-    λ_max = 1.1*maximum(pricedata.λ[1:24,1:nscenarios(model)])
-    λ_min = 0.9*minimum(pricedata.λ[1:24,1:nscenarios(model)])
-    bidprices = collect(linspace(λ_min,λ_max,3))
+    bidprices = collect(linspace(λ̱,λ̄,3))
     prepend!(bidprices,regulations.lowerorderlimit)
     push!(bidprices,regulations.upperorderlimit)
-    return bidprices
+    prices = PriceData(pricefilename)
+    DayAheadData(HydroPlantCollection(plantfilename),regulations,bidprices,expected(prices))
 end
+
+struct DayAheadScenario{T <: AbstractFloat} <: AbstractScenarioData
+    π::T                 # Scenario probability
+    ρ::PriceCurve{T}     # Market price per hour
+
+    function (::Type{DayAheadScenario})(π::AbstractFloat,ρ::PriceCurve{T}) where T <: AbstractFloat
+        return new{T}(π,ρ)
+    end
+end
+
+function DayAheadScenarios(pricefilename::String,npricecurves::Integer)
+    scenarios = Vector{DayAheadScenario}(npricecurves)
+    pricedata = PriceData(pricefilename)
+    π = 1/npricecurves
+    for i in 1:npricecurves
+        ρ = pricedata[i][Day()]
+        scenarios[i] = DayAheadScenario(π,ρ)
+    end
+    return scenarios
+end
+
+function StochasticPrograms.expected(scenarios::Vector{DayAheadScenario})
+    π = 1.0
+    ρ = [mean([s.ρ[i] for s in scenarios]) for i in 1:nhours(Day())]
+    return DayAheadScenario(π,PriceCurve(ρ))
+end
+
+penalty(scenario::DayAheadScenario,t) = 1.1*scenario.ρ[t]
+reward(scenario::DayAheadScenario,t) = 0.9*scenario.ρ[t]
 
 function modelindices(horizon::Horizon, data::DayAheadData, scenarios::Vector{<:AbstractScenarioData}, areas::Vector{Area}, rivers::Vector{River})
     hours = collect(1:nhours(horizon))
@@ -55,30 +79,162 @@ function modelindices(horizon::Horizon, data::DayAheadData, scenarios::Vector{<:
     bids = collect(1:length(data.bidprices))
     blockbids = collect(1:length(data.bidprices)-2)
     hours_per_block = [collect(h:ending) for h in hours for ending in hours[h+data.regulations.blockminlength-1:end]]
-    blocks = collect(1:length(model.hours_per_block))
-    return DayAheadIndices(hours, plants, segments, bids, blockbids, hours_per_block, blocks)
+    blocks = collect(1:length(hours_per_block))
+    return DayAheadIndices(hours, plants, segments, bids, blockbids, blocks, hours_per_block)
 end
 
-struct DayAheadScenario{T <: AbstractFloat} <: AbstractScenarioData
-    π::T                 # Scenario probability
-    ρ::Vector{T}         # Market price per hour
-    ρ̅::Vector{T}         # Average market price per block
+@hydromodel Stochastic DayAhead = begin
+    @unpack hours, plants, segments, bids, blockbids, blocks, hours_per_block = indices
+    hdata = data.plantdata
+    regulations = data.regulations
+    ph = data.bidprices
+    pb = ph[2:end-1]
 
-    function (::Type{DayAheadScenario})(π::AbstractFloat,ρ::AbstractVector,ρ̅::AbstractVector)
-        T = promote_type(typeof(π),eltype(ρ),eltype(ρ̅),Float32)
-        return new{T}(π,ρ,ρ̅)
+    # First stage
+    # ========================================================
+    @first_stage model = begin
+        # Variables
+        # ========================================================
+        @variable(model, xt_i[t = hours] >= 0)
+        @variable(model, xt_d[i = bids, t = hours] >= 0)
+        @variable(model, xb[i = blockbids, b = blocks], lowerbound = 0, upperbound = regulations.blocklimit)
+        # Constraints
+        # ========================================================
+        # Increasing bid curve
+        @constraint(model, bidcurve[i = bids[1:end-1], t = hours],
+                    xt_d[i,t] <= xt_d[i+1,t]
+                    )
+        # Maximal bids
+        @constraint(model, maxhourlybids[t = hours],
+                    xt_i[t] + xt_d[bids[end],t] + sum(xb[i,b] for i = blockbids for b = find(A->in(t,A),hours_per_block)) <= 1.1*sum(hdata[p].H̄ for p in plants)
+                    )
+    end
+
+    # Second stage
+    # =======================================================
+    @second_stage model = begin
+        @unpack ρ = scenario
+        ih(t) = findlast(ph .<= ρ[t])
+        ib(b) = findlast(pb .<= mean(ρ[hours_per_block[b]]))
+        # Variables
+        # =======================================================
+        # First stage
+        @decision xt_i xt_d xb
+        # -------------------------------------------------------
+        @variable(model, yt[t = hours] >= 0)
+        @variable(model, yb[b = blocks] >= 0)
+        @variable(model, z_up[t = hours] >= 0)
+        @variable(model, z_do[t = hours] >= 0)
+        @variable(model, Q[p = plants, s = segments, t = hours], lowerbound = 0, upperbound = hdata[p].Q̄[s])
+        @variable(model, S[p = plants, t = hours] >= 0)
+        @variable(model, M[p = plants, t = hours], lowerbound = 0, upperbound = hdata[p].M̄)
+        @variable(model, H[t = hours] >= 0)
+        @variable(model, Qf[p = plants, t = hours] >= 0)
+        @variable(model, Sf[p = plants, t = hours] >= 0)
+
+        # Objectives
+        # ========================================================
+        # Net profit
+        @expression(model, net_profit,
+                    sum((ρ[t]-0.04)*yt[t]
+                        for t = hours)
+                    + sum(length(hours_per_block[b])*(mean(ρ[hours_per_block[b]])-0.04)*yb[b]
+                          for b = blocks)
+                    - sum(penalty(scenario,t)*z_up[t] - reward(scenario,t)*z_do[t]
+                          for t = hours))
+        # Value of stored water
+        @expression(model, value_of_stored_water,
+                    data.λ̄*sum(M[p,nhours(horizon)]*sum(hdata[i].μ[1]
+                                                   for i = hdata.Qd[p])
+                          for p = plants))
+        # Define objective
+        @objective(model, Max, net_profit + value_of_stored_water)
+
+        # Constraints
+        # ========================================================
+        # Bid-dispatch links
+        @constraint(model, hourlybids[t = hours],
+                    yt[t] == ((ρ[t] - ph[ih(t)])/(ph[ih(t)+1]-ph[ih(t)]))*xt_d[ih(t)+1,t]
+                         + ((ph[ih(t)+1]-ρ[t])/(ph[ih(t)+1]-ph[ih(t)]))*xt_d[ih(t),t]
+                         + xt_i[t]
+                    )
+        @constraint(model, bidblocks[b = blocks],
+                    yb[b] == sum(xb[j,b]
+                                 for j = 1:ib(b)))
+
+        # Hydrological balance
+        @constraint(model, hydro_constraints[p = plants, t = hours],
+                    # Previous reservoir content
+                    M[p,t] == (t > 1 ? M[p,t-1] : hdata[p].M₀)
+                    # Inflow
+                    + sum(Qf[i,t]
+                          for i = intersect(hdata.Qu[p],plants))
+                    + sum(Sf[i,t]
+                          for i = intersect(hdata.Su[p],plants))
+                    # Local inflow
+                    + hdata[p].V
+                    + (t <= hdata[p].Rqh ? 1 : 0)*sum(hdata[i].Q̃
+                                                      for i = hdata.Qu[p])
+                    + (t == (hdata[p].Rqh + 1) ? 1 : 0)*sum(hdata[i].Q̃*(1-hdata[p].Rqm/60)
+                                                            for i = hdata.Qu[p])
+                    # Outflow
+                    - sum(Q[p,s,t]
+                          for s = segments)
+                    - S[p,t]
+                    )
+        # Production
+        @constraint(model, production[t = hours],
+                    H[t] == sum(hdata[p].μ[s]*Q[p,s,t]
+                                for p = plants, s = segments)
+                    )
+        # Load balance
+        @constraint(model, loadbalance[t = hours],
+                    yt[t] + sum(yb[b] for b = find(A->in(t,A),hours_per_block)) - H[t] == z_up[t] - z_do[t]
+                    )
+        # Water flow: Discharge + Spillage
+        @constraintref Qflow[1:length(plants),1:nhours(horizon)]
+        @constraintref Sflow[1:length(plants),1:nhours(horizon)]
+        for (pidx,p) = enumerate(plants)
+            for t = hours
+                if t - hdata[p].Rqh > 1
+                    Qflow[pidx,t] = @constraint(model,
+                                                Qf[p,t] == (hdata[p].Rqm/60)*sum(Q[p,s,t-(hdata[p].Rqh+1)]
+                                                                                 for s = segments)
+                                                + (1-hdata[p].Rqm/60)*sum(Q[p,s,t-hdata[p].Rqh]
+                                                                          for s = segments)
+                                                )
+                elseif t - hdata[p].Rqh > 0
+                    Qflow[pidx,t] = @constraint(model,
+                                                Qf[p,t] == (1-hdata[p].Rqm/60)*sum(Q[p,s,t-hdata[p].Rqh]
+                                                                                   for s = segments)
+                                                )
+                else
+                    Qflow[pidx,t] = @constraint(model,
+                                                Qf[p,t] == 0
+                                                )
+                end
+                if t - hdata[p].Rsh > 1
+                    Sflow[pidx,t] = @constraint(model,
+                                                Sf[p,t] == (hdata[p].Rsm/60)*S[p,t-(hdata[p].Rsh+1)]
+                                                + (1-hdata[p].Rsm/60)*S[p,t-hdata[p].Rsh]
+                                                )
+                elseif t - hdata[p].Rsh > 0
+                    Sflow[pidx,t] = @constraint(model,
+                                                Sf[p,t] == (1-hdata[p].Rsm/60)*S[p,t-hdata[p].Rsh]
+                                                )
+                else
+                    Sflow[pidx,t] = @constraint(model,
+                                                Sf[p,t] == 0
+                                                )
+                end
+            end
+        end
     end
 end
 
-function StochasticPrograms.expected(scenarios::Vector{DayAheadScenario})
-    π = 1.0
-    ρ = [mean([s.ρ[i] for s in scenarios]) for i in 1:24]
-    ρ̅ = mean([s.ρ̅ for s in scenarios])
-    return DayAheadScenario(π,ρ,ρ̅)
-end
-
-penalty(scenario::DayAheadScenario,t) = 1.1*scenario.ρ[t]
-reward(scenario::DayAheadScenario,t) = 0.9*scenario.ρ[t]
-
-include("orderstrategy.jl")
-include("day_ahead_model.jl")
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},area::Area,river::River) = DayAheadModel(Day(),modeldata,scenarios,[area],[river])
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},area::Area) = DayAheadModel(Day(),modeldata,scenarios,[area],[:All])
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},areas::Vector{Area}) = DayAheadModel(Day(),modeldata,scenarios,areas,[:All])
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},river::River) = DayAheadModel(Day(),modeldata,scenarios,[0],[river])
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},rivers::Vector{River}) = DayAheadModel(Day(),modeldata,scenarios,[0],rivers)
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData}) = DayAheadModel(Day(),modeldata,scenarios,[0],[:All])

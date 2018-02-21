@@ -91,8 +91,8 @@ function define_model_indices(model::DayAheadModel)
 end
 
 function define_bid_prices(model::DayAheadModel)
-    λ_max = 1.1*maximum(model.modeldata.λ[1:24,1:numscenarios(model)])
-    λ_min = 0.9*minimum(model.modeldata.λ[1:24,1:numscenarios(model)])
+    λ_max = 1.1*maximum(model.modeldata.λ[1:24,1:nscenarios(model)])
+    λ_min = 0.9*minimum(model.modeldata.λ[1:24,1:nscenarios(model)])
     model.bidprices = collect(linspace(λ_min,λ_max,3))
     prepend!(model.bidprices,model.regulations.lowerorderlimit)
     push!(model.bidprices,model.regulations.upperorderlimit)

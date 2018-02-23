@@ -22,7 +22,7 @@ end
 plants(indices::DayAheadIndices) = indices.plants
 
 struct DayAheadData{T <: AbstractFloat} <: AbstractModelData
-    plantdata::HydroPlantCollection{T,2}
+    hydrodata::HydroPlantCollection{T,2}
     regulations::TradeRegulations{T}
     bidprices::Vector{T}
     λ̄::T
@@ -71,7 +71,7 @@ reward(scenario::DayAheadScenario,t) = 0.9*scenario.ρ[t]
 
 function modelindices(horizon::Horizon, data::DayAheadData, scenarios::Vector{<:AbstractScenarioData}, areas::Vector{Area}, rivers::Vector{River})
     hours = collect(1:nhours(horizon))
-    plants = plants_in_areas_and_rivers(data.plantdata,areas,rivers)
+    plants = plants_in_areas_and_rivers(hydrodata(data),areas,rivers)
     if isempty(plants)
         error("No plants in given set of price areas and rivers")
     end
@@ -85,7 +85,7 @@ end
 
 @hydromodel Stochastic DayAhead = begin
     @unpack hours, plants, segments, bids, blockbids, blocks, hours_per_block = indices
-    hdata = data.plantdata
+    hdata = hydrodata(data)
     regulations = data.regulations
     ph = data.bidprices
     pb = ph[2:end-1]

@@ -21,6 +21,7 @@ struct HydroPlantData{T <: AbstractFloat, S}
         return new{T,S}(M₀,M̄,H̄,Q̄,μ,S̱,Rgh,Rqm,Rsh,Rsm,Q̃,V)
     end
 end
+Base.eltype(::HydroPlantData{T}) where T <: AbstractFloat = T
 
 struct HydroPlantCollection{T <: AbstractFloat, S}
     # Plants
@@ -73,6 +74,21 @@ struct HydroPlantCollection{T <: AbstractFloat, S}
                              Dict{Plant,Vector{Plant}}(),)
         define_model_parameters(modeldata,plantfilename)
         return modeldata
+    end
+end
+Base.eltype(::HydroPlantCollection{T}) where T <: AbstractFloat = T
+
+function Base.show(io::IO, collection::HydroPlantCollection)
+    if get(io, :multiline, false)
+        print(io,"HydroPlantCollection")
+    else
+        println(io,"Collection of Hydropower Plants")
+        if !isempty(collection.rivers)
+            println(io,"Rivers:")
+            for river in keys(collection.rivers)
+                println(io,string(river))
+            end
+        end
     end
 end
 

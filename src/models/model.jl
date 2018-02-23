@@ -31,7 +31,7 @@ end
 function production(hydromodel::AbstractHydroModel)
     status(hydromodel) == :Planned || error("Hydro model has not been planned yet")
 
-    return ProductionPlan(hydromodel.horizon,hydromodel.modeldata,hydromodel.plants,hydromodel.internalmodel)
+    return HydroProductionPlan(hydromodel)
 end
 
 abstract type DeterministicHydroModel <: AbstractHydroModel end
@@ -60,6 +60,7 @@ function define_problem!(hydromodel::DeterministicHydroModel)
     model = Model()
     hydromodel.generator(model,hydromodel.horizon,hydromodel.data,hydromodel.indices)
     hydromodel.internalmodel = model
+    hydromodel.status = :Unplanned
     nothing
 end
 
@@ -108,6 +109,8 @@ function define_problem!(hydromodel::StochasticHydroModel)
     model = StochasticProgram(hydromodel.scenarios)
     hydromodel.generator(model,hydromodel.horizon,hydromodel.data,hydromodel.indices)
     hydromodel.internalmodel = model
+    hydromodel.status[:rp] = :Unplanned
+    hydromodel.status[:evp] = :Unplanned
     nothing
 end
 
@@ -166,7 +169,7 @@ macro hydromodel(variant,def)
                     end
                     indices = modelindices(horizon,data,args...)
                     I = typeof(indices)
-                    hydromodel = new{I,D}(horizon,data,indices,generator,:Unplanned)
+                    hydromodel = new{D,I}(horizon,data,indices,generator,:Unplanned)
                     define_problem!(hydromodel)
                     return hydromodel
                 end

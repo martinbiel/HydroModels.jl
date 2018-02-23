@@ -11,16 +11,14 @@ using MacroTools: postwalk, @q
 
 import MathProgBase.SolverInterface.AbstractMathProgSolver
 import MathProgBase.SolverInterface.status
-import Plots.font
-import Plots.text
-import Plots.Shape
-import Plots.px
+# import Plots.text
+# import Plots.Shape
 
 export
     HydroModelData,
     ShortTermModel,
     DayAheadModel,
-    initialize!,
+    reinitialize!,
     plan!,
     production,
     strategy,
@@ -35,19 +33,23 @@ export
     singleorders,
     blockorders,
     independent,
-    dependent
+    dependent,
+    Day,
+    Week
 
 JuMPModel = JuMP.Model
 JuMPVariable = JuMP.Variable
 
 # Include files
 include("data/data.jl")
-#include("productionplan.jl")
 include("models/model.jl")
 
 # Models
 #include("day-ahead/DayAhead.jl")
 include("models/short-term/short_term_model.jl")
 include("models/day-ahead/DayAhead.jl")
+
+# Analysis
+include("productionplan.jl")
 
 end # module

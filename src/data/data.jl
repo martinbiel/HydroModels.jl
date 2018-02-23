@@ -1,14 +1,23 @@
 include("horizon.jl")
 include("segmenter.jl")
-include("plantdata.jl")
+include("hydrodata.jl")
 include("pricedata.jl")
 
 Scenario = Int
 
 abstract type AbstractModelIndices end
-plants(indices::AbstractModelIndices) = error("Not implemented.")
+
+function plants(indices::AbstractModelIndices)
+    :plants ∈ fieldnames(indices) || error("Model indices do not contain hydro plants")
+    return indices.plants
+end
 
 abstract type AbstractModelData end
+
+function hydrodata(data::AbstractModelData)
+    :hydrodata ∈ fieldnames(data) || error("Model data does not contain hydro data")
+    return data.hydrodata
+end
 
 modelindices(horizon::Horizon,data::AbstractModelData,args...) = error("No definition of modelindices for ", typeof(data))
 modelindices(horizon::Horizon,data::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},args...) = error("No definition of modelindices for ", typeof(data), " and ", eltype(scenarios))

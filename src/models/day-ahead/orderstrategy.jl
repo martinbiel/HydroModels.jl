@@ -191,15 +191,18 @@ end
     yticks := 0:orderincrement:order.prices[end-1]
     ylims := (-orderincrement,order.prices[end-1]+orderincrement)
     formatter := (d) -> @sprintf("%.2f",d)
-    tickfont := font(14,"sans-serif")
 
     title := "Order Curve"
     xlabel := "Order Volume [MWh/h]"
     ylabel := "Price [EUR/MWh]"
-    tickfont := font(14,"sans-serif")
-    guidefont := font(16,"sans-serif")
-    titlefont := font(18,"sans-serif")
-    legendfont := font(16,"sans-serif")
+    tickfontsize := 14
+    tickfontfamily := "sans-serif"
+    guidefontsize := 16
+    guidefontfamily := "sans-serif"
+    titlefontsize := 18
+    titlefontsize := "sans-serif"
+    legendfontsize := 16
+    legendfontsize := "sans-serif"
 
     # Dashed line
     if !isempty(line_v)
@@ -371,15 +374,18 @@ end
     else
         yticks := 0:orderincrement:prices[end]
     end
-    tickfont := font(14,"sans-serif")
-    guidefont := font(16,"sans-serif")
-    titlefont := font(22,"sans-serif")
-    legendfont := font(16,"sans-serif")
+    tickfontsize := 14
+    tickfontfamily := "sans-serif"
+    guidefontsize := 16
+    guidefontfamily := "sans-serif"
+    titlefontsize := 22
+    titlefontsize := "sans-serif"
+    legendfontsize := 16
+    legendfontsize := "sans-serif"
+
     legend := :topleft
     annotations := ordervolumes
     yformatter := (d) -> @sprintf("%.2f",d)
-    # left_margin --> -50px
-    # bottom_margin --> -30px
 
     title := "Single Orders"
     xlabel := "Hour"
@@ -515,10 +521,14 @@ end
         yticks := []
     end
     title := "Block Order"
-    tickfont := font(14,"sans-serif")
-    guidefont := font(16,"sans-serif")
-    legendfont := font(16,"sans-serif")
-    titlefont := font(22,"sans-serif")
+    tickfontsize := 14
+    tickfontfamily := "sans-serif"
+    guidefontsize := 16
+    guidefontfamily := "sans-serif"
+    titlefontsize := 22
+    titlefontsize := "sans-serif"
+    legendfontsize := 16
+    legendfontsize := "sans-serif"
     title := "Block Order"
     xlabel := "Hour"
     ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""
@@ -644,10 +654,14 @@ end
         yticks := []
     end
     yformatter := (d) -> @sprintf("%.2f",d)
-    tickfont := font(14,"sans-serif")
-    guidefont := font(16,"sans-serif")
-    legendfont := font(16,"sans-serif")
-    titlefont := font(22,"sans-serif")
+    tickfontsize := 14
+    tickfontfamily := "sans-serif"
+    guidefontsize := 16
+    guidefontfamily := "sans-serif"
+    titlefontsize := 22
+    titlefontsize := "sans-serif"
+    legendfontsize := 16
+    legendfontsize := "sans-serif"
     title := "Block Orders"
     xlabel := "Hour"
     ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""

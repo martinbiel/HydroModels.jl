@@ -3,10 +3,9 @@ struct ShortTermIndices <: AbstractModelIndices
     plants::Vector{Plant}
     segments::Vector{Int}
 end
-plants(indices::ShortTermIndices) = indices.plants
 
 struct ShortTermData{T <: AbstractFloat} <: AbstractModelData
-    plantdata::HydroPlantCollection{T,2}
+    hydrodata::HydroPlantCollection{T,2}
     pricecurve::PriceCurve{T}
 
     function (::Type{ShortTermData})(plantdata::HydroPlantCollection{T,2},pricecurve::PriceCurve{T}) where T <: AbstractFloat
@@ -19,7 +18,7 @@ end
 
 function modelindices(horizon::Horizon,data::ShortTermData,areas::Vector{Area},rivers::Vector{River})
     hours = collect(1:nhours(horizon))
-    plants = plants_in_areas_and_rivers(data.plantdata,areas,rivers)
+    plants = plants_in_areas_and_rivers(hydrodata(data),areas,rivers)
     if isempty(plants)
         error("No plants in given set of price areas and rivers")
     end
@@ -31,7 +30,7 @@ end
 
 @hydromodel Deterministic ShortTerm = begin
     @unpack hours, plants, segments = indices
-    hdata = data.plantdata
+    hdata = hydrodata(data)
     λ = data.pricecurve
     λ̄ = expected(λ)
     HydroModels.horizon(λ) >= horizon || error("Not enough price data for chosen horizon")
@@ -132,3 +131,7 @@ ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,areas::Vector{Area}
 ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,river::River) = ShortTermModel(horizon,modeldata,[0],[river])
 ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,rivers::Vector{River}) = ShortTermModel(horizon,modeldata,[0],rivers)
 ShortTermModel(horizon::Horizon,modeldata::AbstractModelData) = ShortTermModel(horizon,modeldata,[0],[:All])
+
+reinitialize!(hydromodel::ShortTermModel,area::Area,river::River) = reinitialize!(hydromodel,[area],[river])
+reinitialize!(hydromodel::ShortTermModel,river::River) = reinitialize!(hydromodel,[0],[river])
+reinitialize!(hydromodel::ShortTermModel,rivers::Vector{River}) = reinitialize!(hydromodel,[0],rivers)

@@ -238,3 +238,9 @@ DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioD
 DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},river::River) = DayAheadModel(Day(),modeldata,scenarios,[0],[river])
 DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},rivers::Vector{River}) = DayAheadModel(Day(),modeldata,scenarios,[0],rivers)
 DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData}) = DayAheadModel(Day(),modeldata,scenarios,[0],[:All])
+
+function strategy(model::DayAheadModel; variant = :dep)
+    status(model; variant = variant) == :Planned || error("Hydro model has not been planned yet")
+
+    return OrderStrategy(model)
+end

@@ -23,8 +23,12 @@ struct OrderStrategy
     block_orders::Vector{BlockOrder}     # All block orders
 end
 
-function OrderStrategy(horizon::Horizon,regulations::TradeRegulations,prices::Vector{Float64},model::JuMPModel)
-    @assert haskey(model.objDict,:xt_i) && haskey(model.objDict,:xt_d) && haskey(model.objDict,:xb) "Given JuMP model does not model order strategies"
+function OrderStrategy(model::AbstractHydroModel)
+    (haskey(model.objDict,:xt_i) && haskey(model.objDict,:xt_d) && haskey(model.objDict,:xb)) || error("Given JuMP model does not model order strategies")
+    optmodel = model.internalmodel
+    horizon = HydroModels.horizon(model)
+    regulations = model.data.regulations
+    prices = model.data.prices
     blockprices = prices[2:end-1]
 
     xt_i = getvalue(model.objDict[:xt_i])
@@ -32,7 +36,7 @@ function OrderStrategy(horizon::Horizon,regulations::TradeRegulations,prices::Ve
     xb = getvalue(model.objDict[:xb])
 
     # Check data length consistency
-    hs = 1:hours(horizon)
+    hs = 1:nhours(horizon)
     hours_per_block = [collect(h:ending) for h in hs for ending in hs[h+regulations.blockminlength-1:end]]
     @assert hours(horizon) == length(xt_i) "Incorrect horizon of price independent single orders"
     @assert hours(horizon) == JuMP.size(xt_d)[2] "Incorrect horizon of price dependent single orders"
@@ -41,8 +45,8 @@ function OrderStrategy(horizon::Horizon,regulations::TradeRegulations,prices::Ve
     @assert length(blockprices) == JuMP.size(xb)[1] "Incorrect number of possible orders in block orders"
 
     # Accumulate orders per hour
-    single_orders = Vector{SingleOrder}(hours(horizon))
-    for hour in 1:hours(horizon)
+    single_orders = Vector{SingleOrder}(nhours(horizon))
+    for hour in 1:nhours(horizon)
         single_d = [xt_d[order,hour] for order = 1:length(prices)]
         single_orders[hour] = SingleOrder(hour,xt_i[hour],single_d,prices)
     end
@@ -58,9 +62,9 @@ function OrderStrategy(horizon::Horizon,regulations::TradeRegulations,prices::Ve
     end
 
     return OrderStrategy(horizon,
-                       prices,
-                       single_orders,
-                       block_orders)
+                         prices,
+                         single_orders,
+                         block_orders)
 end
 
 function singleorder(strategy::OrderStrategy,hour::Int64)

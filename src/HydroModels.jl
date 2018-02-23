@@ -45,11 +45,11 @@ include("data/data.jl")
 include("models/model.jl")
 
 # Models
-#include("day-ahead/DayAhead.jl")
 include("models/short-term/short_term_model.jl")
 include("models/day-ahead/DayAhead.jl")
 
 # Analysis
 include("productionplan.jl")
+include("models/day-ahead/orderstrategy.jl")
 
 end # module

@@ -4,6 +4,13 @@ function show(io::IO, ::MIME"text/plain", hydromodel::AbstractHydroModel)
     show(io,hydromodel)
 end
 
+function modelname(hydromodel::M) where M <: AbstractHydroModel
+    typename = string(M)
+    chompname = match(r"(?:[^{]*\.)*([A-Za-z]+)(?:{.*})*",typename)
+    modelname = split(chompname.captures[1],"Model")[1]
+    return join(split(modelname,r"(?<!^)(?=[A-Z])")," ")
+end
+
 horizon(hydromodel::AbstractHydroModel) = hydromodel.horizon
 
 function status(hydromodel::AbstractHydroModel)
@@ -169,8 +176,6 @@ macro hydromodel(variant,def)
                     return hydromodel
                 end
             end
-
-            $(esc(:modelname))(::$(esc(modelname))) = join(split($(esc(string(name))),r"(?<!^)(?=[A-Z])")," ")
         end
         code
     elseif variant == :Stochastic
@@ -197,8 +202,6 @@ macro hydromodel(variant,def)
                     return hydromodel
                 end
             end
-
-            $(esc(:modelname))(::$(esc(modelname))) = join(split($(esc(string(name))),r"(?<!^)(?=[A-Z])")," ")
         end
         code
     else

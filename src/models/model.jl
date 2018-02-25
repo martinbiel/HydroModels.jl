@@ -1,16 +1,10 @@
 abstract type AbstractHydroModel end
 
-function Base.show(io::IO, ::MIME"text/plain", hydromodel::AbstractHydroModel)
+function show(io::IO, ::MIME"text/plain", hydromodel::AbstractHydroModel)
     show(io,hydromodel)
 end
 
 horizon(hydromodel::AbstractHydroModel) = hydromodel.horizon
-
-function changehorizon!(hydromodel::AbstractHydroModel, newhorizon::Horizon)
-    hydromodel.horizon = newhorizon
-    define_problem!(hydromodel)
-    return hydromodel
-end
 
 function status(hydromodel::AbstractHydroModel)
     # Maybe internalModelLoaded here? check JuMP
@@ -36,7 +30,7 @@ end
 
 abstract type DeterministicHydroModel <: AbstractHydroModel end
 
-function Base.show(io::IO, hydromodel::DeterministicHydroModel)
+function show(io::IO, hydromodel::DeterministicHydroModel)
     if get(io, :multiline, false)
         print(io,string("Deterministic Hydro Power Model : ", modelname(hydromodel), ", including ", length(plants(hydromodel.indices)), " power stations, over a ", nhours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)))
     else
@@ -64,22 +58,22 @@ function define_problem!(hydromodel::DeterministicHydroModel)
     nothing
 end
 
-function reinitialize!(hydromodel::DeterministicHydroModel, args...)
-    hydromodel.indices = modelindices(horizon(hydromodel),hydromodel.data,args...)
-    define_problem!(hydromodel)
+function reload!(hydromodel::DeterministicHydroModel, data::AbstractModelData, args...)
+    hydromodel.data = data
+    reinitialize!(hydromodel,args...)
     return hydromodel
 end
 
-function reinitialize!(hydromodel::DeterministicHydroModel, newhorizon::Horizon, args...)
-    hydromodel.horizon = newhorizon
-    hydromodel.indices = indices(newhorizon,hydromodel.data,args...)
+function reinitialize!(hydromodel::DeterministicHydroModel, horizon::Horizon, args...)
+    hydromodel.horizon = horizon
+    hydromodel.indices = modelindices(hydromodel.data, horizon, args...)
     define_problem!(hydromodel)
     return hydromodel
 end
 
 abstract type StochasticHydroModel <: AbstractHydroModel end
 
-function Base.show(io::IO, hydromodel::StochasticHydroModel)
+function show(io::IO, hydromodel::StochasticHydroModel)
     if get(io, :multiline, false)
         print(io,string("Stochastic Hydro Power Model : ", modelname(hydromodel), ", including ", length(plants(hydromodel.indices)), " power stations, over a ", nhours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)), " featuring ", nscenarios(hydromodel), " scenarios")
     else
@@ -114,15 +108,16 @@ function define_problem!(hydromodel::StochasticHydroModel)
     nothing
 end
 
-function reinitialize!(hydromodel::StochasticHydroModel, args...)
-    hydromodel.indices = modelindices(horizon(hydromodel),hydromodel.data,hydromodel.scenarios,args...)
-    define_problem!(hydromodel)
+function reload!(hydromodel::StochasticHydroModel, data::AbstractModelData, scenarios::Vector{<:AbstractScenarioData}, args...)
+    hydromodel.data = data
+    hydromodel.scenarios = scenarios
+    reinitialize!(hydromodel,args...)
     return hydromodel
 end
 
-function reinitialize!(hydromodel::StochasticHydroModel, newhorizon::Horizon, args...)
-    hydromodel.horizon = newhorizon
-    hydromodel.indices = indices(newhorizon,hydromodel.data,hydromodel.scenarios,args...)
+function reinitialize!(hydromodel::StochasticHydroModel, horizon::Horizon, args...)
+    hydromodel.horizon = horizon
+    hydromodel.indices = modelindices(hydromodel.data,hydromodel.scenarios,horizon,args...)
     define_problem!(hydromodel)
     return hydromodel
 end
@@ -167,7 +162,7 @@ macro hydromodel(variant,def)
                     generator = ($(esc(:model)),$(esc(:horizon)),$(esc(:data)),$(esc(:indices))) -> begin
                         $(esc(modeldef))
                     end
-                    indices = modelindices(horizon,data,args...)
+                    indices = modelindices(data,horizon,args...)
                     I = typeof(indices)
                     hydromodel = new{D,I}(horizon,data,indices,generator,:Unplanned)
                     define_problem!(hydromodel)
@@ -194,7 +189,7 @@ macro hydromodel(variant,def)
                     generator = ($(esc(:model)),$(esc(:horizon)),$(esc(:data)),$(esc(:indices))) -> begin
                         $(esc(modeldef))
                     end
-                    indices = modelindices(horizon,data,scenarios,args...)
+                    indices = modelindices(data,horizon,scenarios,args...)
                     I = typeof(indices)
                     S = eltype(scenarios)
                     hydromodel = new{D,I,S}(horizon,data,indices,scenarios,generator,Dict{Symbol,Symbol}(:rp=>:Unplanned,:evp=>:Unplanned))

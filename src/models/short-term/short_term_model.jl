@@ -16,7 +16,7 @@ function ShortTermData(plantfilename::String,pricecurve::PriceCurve)
     ShortTermData(HydroPlantCollection(plantfilename),pricecurve)
 end
 
-function modelindices(horizon::Horizon,data::ShortTermData,areas::Vector{Area},rivers::Vector{River})
+function modelindices(data::ShortTermData,horizon::Horizon,areas::Vector{Area},rivers::Vector{River})
     hours = collect(1:nhours(horizon))
     plants = plants_in_areas_and_rivers(hydrodata(data),areas,rivers)
     if isempty(plants)
@@ -132,6 +132,9 @@ ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,river::River) = Sho
 ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,rivers::Vector{River}) = ShortTermModel(horizon,modeldata,[0],rivers)
 ShortTermModel(horizon::Horizon,modeldata::AbstractModelData) = ShortTermModel(horizon,modeldata,[0],[:All])
 
-reinitialize!(hydromodel::ShortTermModel,area::Area,river::River) = reinitialize!(hydromodel,[area],[river])
-reinitialize!(hydromodel::ShortTermModel,river::River) = reinitialize!(hydromodel,[0],[river])
-reinitialize!(hydromodel::ShortTermModel,rivers::Vector{River}) = reinitialize!(hydromodel,[0],rivers)
+reinitialize!(hydromodel::ShortTermModel,horizon::Horizon,area::Area,river::River) = reinitialize!(hydromodel,horizon,[area],[river])
+reinitialize!(hydromodel::ShortTermModel,area::Area,river::River) = reinitialize!(hydromodel,horizon(hydromodel),[area],[river])
+reinitialize!(hydromodel::ShortTermModel,horizon::Horizon,river::River) = reinitialize!(hydromodel,horizon,[0],[river])
+reinitialize!(hydromodel::ShortTermModel,river::River) = reinitialize!(hydromodel,horizon(hydromodel),[0],[river])
+reinitialize!(hydromodel::ShortTermModel,horizon::Horizon,rivers::Vector{River}) = reinitialize!(hydromodel,horizon,[0],rivers)
+reinitialize!(hydromodel::ShortTermModel,rivers::Vector{River}) = reinitialize!(hydromodel,horizon(hydromodel),[0],rivers)

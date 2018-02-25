@@ -2,7 +2,7 @@ River = Symbol
 Area = Int
 Plant = Symbol
 
-struct HydroPlantData{T <: AbstractFloat, S}
+mutable struct HydroPlantData{T <: AbstractFloat, S}
     M₀::T                # Initial reservoir contents
     M̄::T                 # Maximum reservoir capacities
     H̄::T                 # Maximal production
@@ -78,7 +78,7 @@ struct HydroPlantCollection{T <: AbstractFloat, S}
 end
 Base.eltype(::HydroPlantCollection{T}) where T <: AbstractFloat = T
 
-function Base.show(io::IO, collection::HydroPlantCollection)
+function show(io::IO, collection::HydroPlantCollection)
     if get(io, :multiline, false)
         print(io,"HydroPlantCollection")
     else

@@ -9,15 +9,19 @@ using Parameters
 using MacroTools
 using MacroTools: postwalk, @q
 
+import Base.show
 import MathProgBase.SolverInterface.AbstractMathProgSolver
 import MathProgBase.SolverInterface.status
 # import Plots.text
 # import Plots.Shape
 
 export
-    HydroModelData,
+    AbstractModelIndices,
+    AbstractModelData,
+    Horizon,
     ShortTermModel,
     DayAheadModel,
+    reload!,
     reinitialize!,
     plan!,
     production,
@@ -35,10 +39,10 @@ export
     independent,
     dependent,
     Day,
-    Week
-
-JuMPModel = JuMP.Model
-JuMPVariable = JuMP.Variable
+    Week,
+    @hydromodel,
+    @deterministic,
+    @stochastic
 
 # Include files
 include("data/data.jl")

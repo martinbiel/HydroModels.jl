@@ -175,7 +175,7 @@ end
     ylabel := "Energy Volume [MWh]"
     xlims := (1,nhours(plan.horizon))
     ylims := (Hmin-increment,Hmax+increment)
-    xticks := 1:1:nhours(plan.horizon)
+    xticks --> 1:1:nhours(plan.horizon)
     yticks := Hmin:increment:Hmax
     yformatter := (d) -> @sprintf("%.2f",d)
 
@@ -224,11 +224,11 @@ end
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", plan::HydroProductionPlan)
+function show(io::IO, ::MIME"text/plain", plan::HydroProductionPlan)
     show(io,plan)
 end
 
-function Base.show(io::IO, plan::HydroProductionPlan)
+function show(io::IO, plan::HydroProductionPlan)
     if get(io, :multiline, false)
         print(io,"Production Plan")
     else

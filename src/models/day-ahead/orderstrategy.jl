@@ -1,57 +1,72 @@
-struct SingleOrder
-    hour::Int64                         # Hour for single order
-    independent_volume::Real            # Price independent order volume
-    dependent_volumes::AbstractVector   # Price dependent order volume
-    prices::AbstractVector              # Price dependent order prices
+struct SingleOrder{T <: AbstractFloat}
+    hour::Int64                    # Hour for single order
+    independent_volume::T          # Price independent order volume
+    dependent_volumes::Vector{T}   # Price dependent order volume
+    prices::Vector{T}              # Price dependent order prices
+
+    function (::Type{SingleOrder})(h::Integer,x_i::AbstractFloat,x_d::AbstractVector,prices::AbstractVector)
+        T = promote_type(typeof(x_i),eltype(x_d),eltype(prices),Float32)
+        return new{T}(h,x_i,convert(Vector{T},x_d),convert(Vector{T},prices))
+    end
 end
 independent(order::SingleOrder) = order.independent_volume
 dependent(order::SingleOrder) = order.dependent_volumes[2:end-1]
 lowertechnical(order::SingleOrder) = order.dependent_volumes[1]
 uppertechnical(order::SingleOrder) = order.dependent_volumes[end]
 
-struct BlockOrder
-    interval::Tuple{Int64,Int64}   # Time range for block order
-    volume::Real                   # Asked volume for block order
-    price::Real                    # Asked price for block order
+struct BlockOrder{T <: AbstractFloat}
+    interval::Tuple{Int,Int}   # Time range for block order
+    volume::T                  # Asked volume for block order
+    price::T                   # Asked price for block order
+
+    function (::Type{BlockOrder})(interval::Tuple{Int,Int},volume::AbstractFloat,price::AbstractFloat)
+        T = promote_type(typeof(volume),typeof(price),Float32)
+        return new{T}(interval,volume,price)
+    end
 end
 
-struct OrderStrategy
-    horizon::Horizon                  # Planning horizon
-    prices::AbstractVector            # Possible prices levels
+struct OrderStrategy{T <: AbstractFloat}
+    horizon::Horizon                        # Planning horizon
+    prices::Vector{T}                       # Possible prices levels
 
-    single_orders::Vector{SingleOrder}   # Order orders each hour
-    block_orders::Vector{BlockOrder}     # All block orders
+    single_orders::Vector{SingleOrder{T}}   # Order orders each hour
+    block_orders::Vector{BlockOrder{T}}     # All block orders
+
+    function (::Type{OrderStrategy})(horizon::Horizon,prices::Vector{T},single_orders::Vector{SingleOrder{T}},block_orders::Vector{BlockOrder{T}}) where T <: AbstractFloat
+        return new{T}(horizon,prices,single_orders,block_orders)
+    end
 end
 
 function OrderStrategy(model::AbstractHydroModel)
-    (haskey(model.objDict,:xt_i) && haskey(model.objDict,:xt_d) && haskey(model.objDict,:xb)) || error("Given JuMP model does not model order strategies")
     optmodel = model.internalmodel
     horizon = HydroModels.horizon(model)
     regulations = model.data.regulations
-    prices = model.data.prices
+    prices = model.data.bidprices
     blockprices = prices[2:end-1]
 
-    xt_i = getvalue(model.objDict[:xt_i])
-    xt_d = getvalue(model.objDict[:xt_d])
-    xb = getvalue(model.objDict[:xb])
+    (haskey(optmodel.objDict,:xt_i) && haskey(optmodel.objDict,:xt_d) && haskey(optmodel.objDict,:xb)) || error("Given JuMP model does not model order strategies")
+
+    xt_i = getvalue(optmodel.objDict[:xt_i])
+    xt_d = getvalue(optmodel.objDict[:xt_d])
+    xb = getvalue(optmodel.objDict[:xb])
 
     # Check data length consistency
     hs = 1:nhours(horizon)
     hours_per_block = [collect(h:ending) for h in hs for ending in hs[h+regulations.blockminlength-1:end]]
-    @assert hours(horizon) == length(xt_i) "Incorrect horizon of price independent single orders"
-    @assert hours(horizon) == JuMP.size(xt_d)[2] "Incorrect horizon of price dependent single orders"
+    @assert nhours(horizon) == length(xt_i) "Incorrect horizon of price independent single orders"
+    @assert nhours(horizon) == JuMP.size(xt_d)[2] "Incorrect horizon of price dependent single orders"
     @assert length(hours_per_block) == JuMP.size(xb)[2] "Incorrect horizon of block orders"
     @assert length(prices) == JuMP.size(xt_d)[1] "Incorrect number of possible orders in price dependent single orders"
     @assert length(blockprices) == JuMP.size(xb)[1] "Incorrect number of possible orders in block orders"
 
     # Accumulate orders per hour
-    single_orders = Vector{SingleOrder}(nhours(horizon))
+    single_orders = Vector{SingleOrder{eltype(prices)}}(nhours(horizon))
     for hour in 1:nhours(horizon)
         single_d = [xt_d[order,hour] for order = 1:length(prices)]
         single_orders[hour] = SingleOrder(hour,xt_i[hour],single_d,prices)
     end
 
-    block_orders = Vector{BlockOrder}()
+    block_orders = Vector{BlockOrder{eltype(prices)}}()
     for (i,price) in enumerate(blockprices)
         for (j,interval) in enumerate(hours_per_block)
             ordervolume = xb[i,j]
@@ -82,8 +97,8 @@ function volumes(strategy::OrderStrategy)
             for hour in 1:hours(strategy.horizon)]
 end
 
-function production(strategy::OrderStrategy,ρs::AbstractVector)
-    H = zeros(hours(strategy.horizon))
+function production(strategy::OrderStrategy{T},ρs::AbstractVector) where T <: AbstractFloat
+    H = zeros(T,hours(strategy.horizon))
     accepted_blocks = blockorders(strategy)[find((o) -> o.price <= mean(ρs[o.interval[1]+1:o.interval[2]]),blockorders(strategy))]
     for h = 1:hours(strategy.horizon)
         ρ = ρs[h]
@@ -136,10 +151,10 @@ function show(io::IO, order::SingleOrder)
     print(io,chomp(output))
 end
 
-@recipe f(order::SingleOrder) = (order,[])
-@recipe f(order::SingleOrder,ρ::Real) = (order,[ρ])
-@recipe f(order::SingleOrder,ρs...) = (order,[ρs...])
-@recipe function f(order::SingleOrder,ρs::AbstractVector)
+@recipe f(order::SingleOrder{T}) where T <: AbstractFloat = (order,[])
+@recipe f(order::SingleOrder{T},ρ::Real) where T <: AbstractFloat = (order,[ρ])
+@recipe f(order::SingleOrder{T},ρs...) where T <: AbstractFloat = (order,[ρs...])
+@recipe function f(order::SingleOrder{T},ρs::AbstractVector) where T <: AbstractFloat
     hour = order.hour
     orderincrement = mean(abs.(diff(order.prices[2:end-1])))
     maxorder = max(order.independent_volume,maximum(order.dependent_volumes))
@@ -204,9 +219,9 @@ end
     guidefontsize := 16
     guidefontfamily := "sans-serif"
     titlefontsize := 18
-    titlefontsize := "sans-serif"
+    titlefontfamily := "sans-serif"
     legendfontsize := 16
-    legendfontsize := "sans-serif"
+    legendfontfamily := "sans-serif"
 
     # Dashed line
     if !isempty(line_v)
@@ -269,10 +284,10 @@ end
     end
 end
 
-@recipe f(orders::Vector{SingleOrder}) = (orders,[])
-@recipe f(orders::Vector{SingleOrder},ρ::Real) = (orders,[ρ])
-@recipe f(orders::Vector{SingleOrder},ρs...) = (orders,[ρs...])
-@recipe function f(orders::Vector{SingleOrder},ρs::AbstractVector; annotationfontsize = 12)
+@recipe f(orders::Vector{SingleOrder{T}}) where T <: AbstractFloat = (orders,[])
+@recipe f(orders::Vector{SingleOrder{T}},ρ::Real) where T <: AbstractFloat = (orders,[ρ])
+@recipe f(orders::Vector{SingleOrder{T}},ρs...) where T <: AbstractFloat = (orders,[ρs...])
+@recipe function f(orders::Vector{SingleOrder{T}},ρs::AbstractVector; annotationfontsize = 12) where T <: AbstractFloat
     prices = orders[1].prices
     orderincrement = mean(abs.(diff(prices[2:end-1])))
     ρ_min = !isempty(ρs) ? minimum(ρs) : []
@@ -383,9 +398,9 @@ end
     guidefontsize := 16
     guidefontfamily := "sans-serif"
     titlefontsize := 22
-    titlefontsize := "sans-serif"
+    titlefontfamily := "sans-serif"
     legendfontsize := 16
-    legendfontsize := "sans-serif"
+    legendfontfamily := "sans-serif"
 
     legend := :topleft
     annotations := ordervolumes
@@ -471,8 +486,8 @@ function show(io::IO, order::BlockOrder)
     print(io,output)
 end
 
-@recipe f(order::BlockOrder) = order,[]
-@recipe function f(order::BlockOrder,ρs::AbstractVector; annotationfontsize = 14)
+@recipe f(order::BlockOrder{T}) where T <: AbstractFloat = order,[]
+@recipe function f(order::BlockOrder{T},ρs::AbstractVector; annotationfontsize = 14) where T <: AbstractFloat
     ρ_min = !isempty(ρs) ? minimum(ρs) : []
     ρ_max = !isempty(ρs) ? maximum(ρs) : []
     δρ = !isempty(ρs) ? mean(abs.(diff(ρs))) : []
@@ -530,9 +545,9 @@ end
     guidefontsize := 16
     guidefontfamily := "sans-serif"
     titlefontsize := 22
-    titlefontsize := "sans-serif"
+    titlefontfamily := "sans-serif"
     legendfontsize := 16
-    legendfontsize := "sans-serif"
+    legendfontfamily := "sans-serif"
     title := "Block Order"
     xlabel := "Hour"
     ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""
@@ -571,8 +586,8 @@ end
     end
 end
 
-@recipe f(orders::Vector{BlockOrder}) = orders,[]
-@recipe function f(orders::Vector{BlockOrder},ρs::AbstractVector; annotationfontsize = 14)
+@recipe f(orders::Vector{BlockOrder{T}}) where T <: AbstractFloat = orders,[]
+@recipe function f(orders::Vector{BlockOrder{T}},ρs::AbstractVector; annotationfontsize = 14) where T <: AbstractFloat
     if !isempty(ρs) && length(ρs) != 24
         throw(ArgumentError("Need to supply a price vector for the whole day when showing block orders"))
     end
@@ -663,9 +678,9 @@ end
     guidefontsize := 16
     guidefontfamily := "sans-serif"
     titlefontsize := 22
-    titlefontsize := "sans-serif"
+    titlefontfamily := "sans-serif"
     legendfontsize := 16
-    legendfontsize := "sans-serif"
+    legendfontfamily := "sans-serif"
     title := "Block Orders"
     xlabel := "Hour"
     ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""
@@ -749,8 +764,8 @@ function show(io::IO, strategy::OrderStrategy)
     end
 end
 
-@recipe f(strategy::OrderStrategy) = strategy,[]
-@recipe function f(strategy::OrderStrategy,ρs::AbstractVector)
+@recipe f(strategy::OrderStrategy{T}) where T <: AbstractFloat = strategy,[]
+@recipe function f(strategy::OrderStrategy{T},ρs::AbstractVector) where T <: AbstractFloat
     if !isempty(ρs) && length(ρs) != 24
         throw(ArgumentError("Need to supply a price vector for the whole day when showing block orders"))
     end

@@ -132,6 +132,7 @@ end
 function plan!(hydromodel::StochasticHydroModel; variant = :rp, optimsolver = ClpSolver())
     setsolver(hydromodel.internalmodel,optimsolver)
     solvestatus = if variant == :rp
+        DEP(hydromodel.internalmodel,optimsolver)
         solve(hydromodel.internalmodel)
     elseif variant == :evp
         evp = EVP(hydromodel.internalmodel,optimsolver)

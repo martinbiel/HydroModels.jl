@@ -12,8 +12,10 @@ using MacroTools: postwalk, @q
 import Base.show
 import MathProgBase.SolverInterface.AbstractMathProgSolver
 import MathProgBase.SolverInterface.status
-# import Plots.text
-# import Plots.Shape
+
+import Plots.font
+import Plots.text
+import Plots.Shape
 
 export
     AbstractModelIndices,

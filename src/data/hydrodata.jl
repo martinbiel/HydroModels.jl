@@ -37,6 +37,21 @@ struct HydroPlantCollection{T <: AbstractFloat, S}
     Sd::Dict{Plant,Vector{Plant}}                # Spillage outlets located downstream (including itself)
     Su::Dict{Plant,Vector{Plant}}                # Spillage outlet(s) located directly upstream
 
+    function HydroPlantCollection(plants::Dict{Plant,HydroPlantData{T,S}},
+                                  Qd::Dict{Plant,Vector{Plant}},
+                                  Qu::Dict{Plant,Vector{Plant}},
+                                  Sd::Dict{Plant,Vector{Plant}},
+                                  Su::Dict{Plant,Vector{Plant}}) where {T <: AbstractFloat,S}
+        return new{T,S}(collect(keys(plants)),
+                        Dict{River,Vector{Plant}}(),
+                        Dict{Area,Vector{Plant}}(),
+                        plants,
+                        Qd,
+                        Qu,
+                        Sd,
+                        Su)
+    end
+
     function HydroPlantCollection(::Type{Segmenter{S}},
                                   plantnames::Vector{String},
                                   Qlinks::Vector{Int},

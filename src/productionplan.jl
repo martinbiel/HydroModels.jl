@@ -50,7 +50,7 @@ function HydroProductionPlan(model::AbstractHydroModel)
                            sum(p.M for p in values(individual_plans)),
                            sum(p.H for p in values(individual_plans)))
 
-    total_plan.H ≈ H.innerArray || error("Difference in total production")
+    total_plan.H ≈ H.innerArray || error("Difference in total production: ", norm(total_plan.H-H.innerArray))
 
     return HydroProductionPlan(model.horizon,
                                data,

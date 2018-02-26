@@ -69,7 +69,7 @@ end
 penalty(scenario::DayAheadScenario,t) = 1.1*scenario.ρ[t]
 reward(scenario::DayAheadScenario,t) = 0.9*scenario.ρ[t]
 
-function modelindices(horizon::Horizon, data::DayAheadData, scenarios::Vector{<:AbstractScenarioData}, areas::Vector{Area}, rivers::Vector{River})
+function modelindices(data::DayAheadData, horizon::Horizon, scenarios::Vector{<:AbstractScenarioData}, areas::Vector{Area}, rivers::Vector{River})
     hours = collect(1:nhours(horizon))
     plants = plants_in_areas_and_rivers(hydrodata(data),areas,rivers)
     if isempty(plants)
@@ -239,7 +239,7 @@ DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioD
 DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},rivers::Vector{River}) = DayAheadModel(Day(),modeldata,scenarios,[0],rivers)
 DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData}) = DayAheadModel(Day(),modeldata,scenarios,[0],[:All])
 
-function strategy(model::DayAheadModel; variant = :dep)
+function strategy(model::DayAheadModel; variant = :rp)
     status(model; variant = variant) == :Planned || error("Hydro model has not been planned yet")
 
     return OrderStrategy(model)

@@ -320,6 +320,8 @@ end
         firstpos = findfirst(a -> a >= sqrt(eps()),order.dependent_volumes)
         if firstpos == 0
             continue
+        elseif firstpos == 1
+            firstpos += 1
         end
         if !any(a -> a >= sqrt(eps()),order.dependent_volumes)
             continue
@@ -339,7 +341,6 @@ end
                         stop = ρ
                         start = 0
                         if abs(interp_volume) <= sqrt(eps())
-                            start = ρ
                             break
                         end
                         push!(accepted,length(dependent_bars)+1)
@@ -356,13 +357,16 @@ end
                 end
             end
         else
-            for i = firstpos:length(order.dependent_volumes)-1
+            for i = 2:length(order.dependent_volumes)
                 volume = order.dependent_volumes[i]
-                previous = order.dependent_volumes[i-1]
-                stop = order.prices[i]
-                if !(abs(volume-previous) <= sqrt(eps())) || i == length(order.dependent_volumes)-1
+                stop,next = if i == length(order.dependent_volumes)
+                    order.prices[end-1]+orderincrement,volume
+                else
+                    order.prices[i],order.dependent_volumes[i+1]
+                end
+                if !(abs(next-volume) <= sqrt(eps())) || i == length(order.dependent_volumes)
                     push!(dependent_bars,rect(order.hour-1,start,1.0,stop-start))
-                    push!(ordervolumes,(order.hour-0.5,(start+stop)/2,formatter(previous)))
+                    push!(ordervolumes,(order.hour-0.5,(start+stop)/2,formatter(volume)))
                     start = stop
                 end
             end

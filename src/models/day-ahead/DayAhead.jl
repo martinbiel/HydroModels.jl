@@ -84,15 +84,13 @@ function modelindices(data::DayAheadData, horizon::Horizon, scenarios::Vector{<:
 end
 
 @hydromodel Stochastic DayAhead = begin
-    @unpack hours, plants, segments, bids, blockbids, blocks, hours_per_block = indices
-    hdata = hydrodata(data)
-    regulations = data.regulations
-    ph = data.bidprices
-    pb = ph[2:end-1]
-
     # First stage
     # ========================================================
     @first_stage model = begin
+        horizon, indices, data = commondata
+        @unpack hours, plants, bids, blockbids, blocks, hours_per_block = indices
+        hdata = hydrodata(data)
+        regulations = data.regulations
         # Variables
         # ========================================================
         @variable(model, xt_i[t = hours] >= 0)
@@ -113,6 +111,12 @@ end
     # Second stage
     # =======================================================
     @second_stage model = begin
+        horizon, indices, data = commondata
+        @unpack hours, plants, segments, blocks, hours_per_block = indices
+        hdata = hydrodata(data)
+        regulations = data.regulations
+        ph = data.bidprices
+        pb = ph[2:end-1]
         @unpack ρ = scenario
         ih(t) = findlast(ph .<= ρ[t])
         ib(b) = findlast(pb .<= mean(ρ[hours_per_block[b]]))

@@ -107,8 +107,8 @@ end
 nscenarios(hydromodel::StochasticHydroModel) = length(hydromodel.scenarios)
 
 function define_problem!(hydromodel::StochasticHydroModel)
-    model = StochasticProgram(hydromodel.scenarios)
-    hydromodel.generator(model,hydromodel.horizon,hydromodel.data,hydromodel.indices)
+    model = StochasticProgram((hydromodel.horizon,hydromodel.indices,hydromodel.data),hydromodel.scenarios)
+    hydromodel.generator(model)
     hydromodel.internalmodel = model
     hydromodel.status[:rp] = :Unplanned
     hydromodel.status[:evp] = :Unplanned
@@ -130,10 +130,8 @@ function reinitialize!(hydromodel::StochasticHydroModel, horizon::Horizon, args.
 end
 
 function plan!(hydromodel::StochasticHydroModel; variant = :rp, optimsolver = ClpSolver())
-    setsolver(hydromodel.internalmodel,optimsolver)
     solvestatus = if variant == :rp
-        DEP(hydromodel.internalmodel,optimsolver)
-        solve(hydromodel.internalmodel)
+        solve(hydromodel.internalmodel, solver=optimsolver)
     elseif variant == :evp
         evp = EVP(hydromodel.internalmodel,optimsolver)
         solve(evp)
@@ -192,7 +190,7 @@ macro hydromodel(variant,def)
 
                 function (::$(esc(:Type)){$(esc(modelname))})(horizon::Horizon,data::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},args...)
                     D = typeof(data)
-                    generator = ($(esc(:model)),$(esc(:horizon)),$(esc(:data)),$(esc(:indices))) -> begin
+                    generator = ($(esc(:model))) -> begin
                         $(esc(modeldef))
                     end
                     indices = modelindices(data,horizon,scenarios,args...)

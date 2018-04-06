@@ -153,7 +153,7 @@ Deterministic Hydro Power Model : Simple Short Term
 Optimally planned
 ```
 
-`HydroModels` recognizes certain variable names, such as `Q,H` and `S`. Hence, the formulated model can make use of provided functions.
+`HydroModels` recognizes certain variable names, such as `Q,H` and `S`. Hence, the formulated model can make use of functions provided by `HydroModels`.
 
 ```julia
 julia> res = production(simple_model)
@@ -188,6 +188,7 @@ julia> plot(res)
 ![simple_production](example_figs/simple_production.png)
 
 ## Available Models
+In addition to modeling templates, `HydroModels` provides some pre defined large-scale planning problems.
 
 ### Short-Term
 
@@ -224,6 +225,8 @@ plot(res)
 ```
 
 ![short-term-production](example_figs/short_term_production.png)
+
+Since model creation is deferred, the planning problem can be reinitialized with for example a longer horizon and more available hydropower plants.
 
 ```julia
 # Reinitialize the model over one week, including two more rivers.

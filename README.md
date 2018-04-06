@@ -6,7 +6,7 @@
 
 [![codecov.io](http://codecov.io/github/martinbiel/HydroModels.jl/coverage.svg?branch=master)](http://codecov.io/github/martinbiel/HydroModels.jl?branch=master)
 
-`HydroModels` is a modeling framework for hydropower operations. It provides templates for specifying deterministic, as well as stochastic (through [StochasticPrograms.jl][StochProg]), hydropower planning problems. Underlying optimization problems are formulated in [JuMP.jl][JuMP]. The model construction in `HydroModels` is deferred through anonymous creation functions, so that the underlying optimization problem is not formulated until data is added to the model. As a results
+`HydroModels` is a modeling framework for hydropower operations. It provides templates for specifying deterministic, as well as stochastic (through [StochasticPrograms.jl][StochProg]), hydropower planning problems. Underlying optimization problems are formulated in [JuMP.jl][JuMP]. The model construction in `HydroModels` is deferred through anonymous creation functions, so that the underlying optimization problem is not formulated until data is added to the model.
 
 [StochProg]: https://github.com/martinbiel/StochasticPrograms.jl
 [JuMP]: https://github.com/JuliaOpt/JuMP.jl
@@ -129,7 +129,7 @@ A simple deterministic planning problem can now be formulated as follows:
 end
 ```
 
-The reserved keywords `indices` and `data` are used to specify the model indices and the model data. The actual values are later injected to construct the planning problem. Assuming a `SimpleShortTermData` object has been loaded, the formulated planning problem can be created as follows:
+The actual values of `horizon`, `indices` and `data` are later injected to construct the planning problem. Assuming a `SimpleShortTermData` object has been loaded, the formulated planning problem can be created as follows:
 
 ```julia
 julia> simple_model = SimpleShortTermModel(Day(),data)
@@ -185,7 +185,7 @@ Power production:
 julia> plot(res)
 ```
 
-[simple_production](example_figs/simple_production.png)
+![simple_production](example_figs/simple_production.png)
 
 ## Available Models
 
@@ -223,7 +223,7 @@ julia> res = production(short_term_model);
 plot(res)
 ```
 
-[short-term-production](example_figs/short_term_production.png)
+![short-term-production](example_figs/short_term_production.png)
 
 ```julia
 # Reinitialize the model over one week, including two more rivers.
@@ -246,7 +246,7 @@ julia> res = production(short_term_model);
 julia> plot(res)
 ```
 
-[short-term-production2](example_figs/short_term_production2.png)
+![short-term-production2](example_figs/short_term_production2.png)
 
 ### Day-Ahead
 Stochastic planning problem over a day. Optimizes bids (hourly order + block bids) on the day-ahead market, over given future scenarios on the next days electricity price. Each subproblem involves profit maximization akin to the short-term model above, where the demand is set by the bids.
@@ -291,4 +291,4 @@ julia> plot(orderstrategy.single_orders,scenarios[1].ρ[Day()])
 
 ```
 
-[day-ahead](example_figs/day_ahead.png)
+![day-ahead](example_figs/day_ahead.png)

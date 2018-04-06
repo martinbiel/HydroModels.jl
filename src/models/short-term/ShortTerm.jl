@@ -26,8 +26,6 @@ function modelindices(data::ShortTermData,horizon::Horizon,areas::Vector{Area},r
     return ShortTermIndices(hours, plants, segments)
 end
 
-# @deterministic_hydro ShortTerm = begin
-
 @hydromodel Deterministic ShortTerm = begin
     @unpack hours, plants, segments = indices
     hdata = hydrodata(data)

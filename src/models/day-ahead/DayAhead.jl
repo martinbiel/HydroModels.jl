@@ -51,10 +51,10 @@ end
 
 function DayAheadScenarios(pricefilename::String,npricecurves::Integer)
     scenarios = Vector{DayAheadScenario}(npricecurves)
-    pricedata = PriceData(pricefilename)
+    pricedata = PriceData(pricefilename,Day(),npricecurves)
     π = 1/npricecurves
     for i in 1:npricecurves
-        ρ = pricedata[i][Day()]
+        ρ = pricedata[i]
         scenarios[i] = DayAheadScenario(π,ρ)
     end
     return scenarios
@@ -87,7 +87,7 @@ end
     # First stage
     # ========================================================
     @first_stage model = begin
-        horizon, indices, data = commondata
+        horizon, indices, data = stage
         @unpack hours, plants, bids, blockbids, blocks, hours_per_block = indices
         hdata = hydrodata(data)
         regulations = data.regulations
@@ -111,7 +111,7 @@ end
     # Second stage
     # =======================================================
     @second_stage model = begin
-        horizon, indices, data = commondata
+        horizon, indices, data = stage
         @unpack hours, plants, segments, blocks, hours_per_block = indices
         hdata = hydrodata(data)
         regulations = data.regulations

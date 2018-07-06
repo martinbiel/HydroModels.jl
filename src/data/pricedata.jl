@@ -42,6 +42,29 @@ struct PriceData{T <: AbstractFloat}
         end
         return new{T}(curves)
     end
+
+    function (::Type{PriceData})(P::AbstractMatrix,horizon::Horizon,ncurves::Integer)
+        T = eltype(P)
+        n_in_rows = div(size(P,1),nhours(horizon))
+        n_cols = size(P,2)
+        available = n_in_rows*n_cols
+        ncurves > available && error("Not enough data to construct all price curves. Asked for $ncurves curves, but only $available are available.")
+        curves = Vector{PriceCurve{T}}(ncurves)
+        idx = 1
+        for i = 1:n_cols
+            if idx > ncurves
+                break
+            end
+            for j = 1:n_in_rows
+                curves[idx] = PriceCurve(P[((j-1)*nhours(horizon)+1):j*nhours(horizon),i])
+                idx = idx + 1
+                if idx > ncurves
+                    break
+                end
+            end
+        end
+        return new{T}(curves)
+    end
 end
 ncurves(pricedata::PriceData) = length(pricedata.curves)
 horizon(pricedata::PriceData,i::Integer) = horizon(pricedata[i])
@@ -52,4 +75,9 @@ Base.getindex(pricedata::PriceData,i::Integer) = pricedata.curves[i]
 function PriceData(filename::String)
     P = readcsv(filename)
     return PriceData(convert(Matrix{Float64},P[2:end,:]))
+end
+
+function PriceData(filename::String,curvehorizon::Horizon,ncurves::Integer)
+    P = readcsv(filename)
+    return PriceData(convert(Matrix{Float64},P[2:end,:]),curvehorizon,ncurves)
 end

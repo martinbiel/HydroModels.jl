@@ -107,7 +107,8 @@ end
 nscenarios(hydromodel::StochasticHydroModel) = length(hydromodel.scenarios)
 
 function define_problem!(hydromodel::StochasticHydroModel)
-    model = StochasticProgram((hydromodel.horizon,hydromodel.indices,hydromodel.data),hydromodel.scenarios)
+    stagedata = (hydromodel.horizon,hydromodel.indices,hydromodel.data)
+    model = StochasticProgram(stagedata,stagedata,hydromodel.scenarios)
     hydromodel.generator(model)
     hydromodel.internalmodel = model
     hydromodel.status[:rp] = :Unplanned

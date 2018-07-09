@@ -43,25 +43,26 @@ struct PriceData{T <: AbstractFloat}
         return new{T}(curves)
     end
 
-    function (::Type{PriceData})(P::AbstractMatrix,horizon::Horizon,ncurves::Integer)
+    function (::Type{PriceData})(P::AbstractMatrix,horizon::Horizon)
         T = eltype(P)
         n_in_rows = div(size(P,1),nhours(horizon))
         n_cols = size(P,2)
         available = n_in_rows*n_cols
-        ncurves > available && error("Not enough data to construct all price curves. Asked for $ncurves curves, but only $available are available.")
-        curves = Vector{PriceCurve{T}}(ncurves)
-        idx = 1
+        curves = Vector{PriceCurve{T}}(available)
         for i = 1:n_cols
-            if idx > ncurves
-                break
-            end
             for j = 1:n_in_rows
-                curves[idx] = PriceCurve(P[((j-1)*nhours(horizon)+1):j*nhours(horizon),i])
-                idx = idx + 1
-                if idx > ncurves
-                    break
-                end
+                curves[(i-1)*n_in_rows+j] = PriceCurve(P[((j-1)*nhours(horizon)+1):j*nhours(horizon),i])
             end
+        end
+        return new{T}(curves)
+    end
+
+    function (::Type{PriceData})(P::AbstractVector,horizon::Horizon)
+        T = eltype(P)
+        available = div(length(P),nhours(horizon))
+        curves = Vector{PriceCurve{T}}(available)
+        for i = 1:available
+            curves[i] = PriceCurve(P[((i-1)*nhours(horizon)+1):i*nhours(horizon)])
         end
         return new{T}(curves)
     end
@@ -77,7 +78,12 @@ function PriceData(filename::String)
     return PriceData(convert(Matrix{Float64},P[2:end,:]))
 end
 
-function PriceData(filename::String,curvehorizon::Horizon,ncurves::Integer)
+function PriceData(filename::String,curvehorizon::Horizon)
     P = readcsv(filename)
-    return PriceData(convert(Matrix{Float64},P[2:end,:]),curvehorizon,ncurves)
+    return PriceData(convert(Matrix{Float64},P[2:end,:]),curvehorizon)
+end
+
+function NordPoolPriceData(filename::String,curvehorizon::Horizon,area::Integer)
+    P = readcsv(filename)
+    return PriceData(convert(Vector{Float64},P[4:end,3+area]),curvehorizon)
 end

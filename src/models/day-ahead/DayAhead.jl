@@ -25,19 +25,30 @@ struct DayAheadData{T <: AbstractFloat} <: AbstractModelData
     hydrodata::HydroPlantCollection{T,2}
     regulations::TradeRegulations{T}
     bidprices::Vector{T}
+    pricedata::PriceData{T}
     λ̄::T
 
-    function (::Type{DayAheadData})(plantdata::HydroPlantCollection{T,2},regulations::TradeRegulations{T},bidprices::Vector{T},λ̄::T) where T <: AbstractFloat
-        return new{T}(plantdata,regulations,bidprices,λ̄)
+    function (::Type{DayAheadData})(plantdata::HydroPlantCollection{T,2},regulations::TradeRegulations{T},bidprices::Vector{T},pricedata::PriceData{T},λ̄::T) where T <: AbstractFloat
+        return new{T}(plantdata,regulations,bidprices,pricedata,λ̄)
     end
 end
+
 function DayAheadData(plantfilename::String,pricefilename::String,λ̱::AbstractFloat,λ̄::AbstractFloat)
     regulations = NordPoolRegulations()
     bidprices = collect(linspace(λ̱,λ̄,3))
     prepend!(bidprices,regulations.lowerorderlimit)
     push!(bidprices,regulations.upperorderlimit)
     prices = PriceData(pricefilename)
-    DayAheadData(HydroPlantCollection(plantfilename),regulations,bidprices,expected(prices))
+    DayAheadData(HydroPlantCollection(plantfilename),regulations,bidprices,prices,expected(prices))
+end
+
+function NordPoolDayAheadData(plantfilename::String,pricefilename::String,area::Integer,λ̱::AbstractFloat,λ̄::AbstractFloat)
+    regulations = NordPoolRegulations()
+    bidprices = collect(linspace(λ̱,λ̄,3))
+    prepend!(bidprices,regulations.lowerorderlimit)
+    push!(bidprices,regulations.upperorderlimit)
+    prices = NordPoolPriceData(pricefilename,Day(),area)
+    DayAheadData(HydroPlantCollection(plantfilename),regulations,bidprices,prices,expected(prices))
 end
 
 struct DayAheadScenario{T <: AbstractFloat} <: AbstractScenarioData
@@ -49,12 +60,11 @@ struct DayAheadScenario{T <: AbstractFloat} <: AbstractScenarioData
     end
 end
 
-function DayAheadScenarios(pricefilename::String,npricecurves::Integer)
+function DayAheadScenarios(dayaheaddata::DayAheadData,npricecurves::Integer)
     scenarios = Vector{DayAheadScenario}(npricecurves)
-    pricedata = PriceData(pricefilename,Day(),npricecurves)
     π = 1/npricecurves
     for i in 1:npricecurves
-        ρ = pricedata[i]
+        ρ = dayaheaddata.pricedata[i]
         scenarios[i] = DayAheadScenario(π,ρ)
     end
     return scenarios

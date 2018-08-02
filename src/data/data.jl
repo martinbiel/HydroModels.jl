@@ -20,4 +20,3 @@ function hydrodata(data::AbstractModelData)
 end
 
 modelindices(data::AbstractModelData,args...) = error("No definition of modelindices for ", typeof(data), " with arguments: ", args...)
-modelindices(data::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},args...) = error("No definition of modelindices for ", typeof(data), " and ", eltype(scenarios), " with arguments: ", args...)

@@ -82,12 +82,12 @@ abstract type StochasticHydroModel <: AbstractHydroModel end
 
 function show(io::IO, hydromodel::StochasticHydroModel)
     if get(io, :multiline, false)
-        print(io,string("Stochastic Hydro Power Model : ", modelname(hydromodel), ", including ", length(plants(hydromodel.indices)), " power stations, over a ", nhours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)), " featuring ", nscenarios(hydromodel), " scenarios")
+        print(io,string("Stochastic Hydro Power Model : ", modelname(hydromodel), ", including ", length(plants(hydromodel.indices)), " power stations, over a ", nhours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)), " featuring ", nscenarios(hydromodel.internalmodel), " scenarios")
     else
         println(io,string("Stochastic Hydro Power Model : ", modelname(hydromodel)))
         println(io,string("    including ", length(plants(hydromodel.indices)), " power stations"))
         println(io,string("    over a ", nhours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)))
-        println(io,string("    featuring ", nscenarios(hydromodel), " scenarios"))
+        println(io,string("    featuring ", nscenarios(hydromodel.internalmodel), " scenarios"))
         println(io,"")
         showstatus(io,hydromodel)
     end
@@ -104,12 +104,31 @@ function status(hydromodel::StochasticHydroModel; variant = :rp)
     return hydromodel.status[variant]
 end
 
-nscenarios(hydromodel::StochasticHydroModel) = length(hydromodel.scenarios)
-
 function define_problem!(hydromodel::StochasticHydroModel)
     stagedata = (hydromodel.horizon,hydromodel.indices,hydromodel.data)
-    model = StochasticProgram(stagedata,stagedata,hydromodel.scenarios)
+    model = StochasticProgram(stagedata,stagedata,scenarios)
     hydromodel.generator(model)
+    hydromodel.internalmodel = model
+    hydromodel.status[:rp] = :Unplanned
+    hydromodel.status[:evp] = :Unplanned
+    nothing
+end
+
+function define_problem!(hydromodel::StochasticHydroModel,scenarios::Vector{<:AbstractScenarioData})
+    stagedata = (hydromodel.horizon,hydromodel.indices,hydromodel.data)
+    model = StochasticProgram(stagedata,stagedata,scenarios)
+    hydromodel.generator(model)
+    hydromodel.internalmodel = model
+    hydromodel.status[:rp] = :Unplanned
+    hydromodel.status[:evp] = :Unplanned
+    nothing
+end
+
+function define_problem!(hydromodel::StochasticHydroModel,sampler::AbstractSampler,n::Integer)
+    stagedata = (hydromodel.horizon,hydromodel.indices,hydromodel.data)
+    model = StochasticProgram(stagedata,stagedata,sampler)
+    hydromodel.generator(model)
+    sample!(model,n)
     hydromodel.internalmodel = model
     hydromodel.status[:rp] = :Unplanned
     hydromodel.status[:evp] = :Unplanned
@@ -118,15 +137,28 @@ end
 
 function reload!(hydromodel::StochasticHydroModel, data::AbstractModelData, scenarios::Vector{<:AbstractScenarioData}, args...)
     hydromodel.data = data
-    hydromodel.scenarios = scenarios
-    reinitialize!(hydromodel,args...)
+    hydromodel.indices = modelindices(hydromodel.data,horizon,args...)
+    define_problem!(hydromodel,scenarios)
+    return hydromodel
+end
+
+function reload!(hydromodel::StochasticHydroModel, data::AbstractModelData, sampler::AbstractSampler, n::Integer, args...)
+    hydromodel.data = data
+    hydromodel.indices = modelindices(hydromodel.data,horizon,args...)
+    define_problem!(hydromodel,sampler,n)
     return hydromodel
 end
 
 function reinitialize!(hydromodel::StochasticHydroModel, horizon::Horizon, args...)
     hydromodel.horizon = horizon
-    hydromodel.indices = modelindices(hydromodel.data,hydromodel.scenarios,horizon,args...)
-    define_problem!(hydromodel)
+    hydromodel.indices = modelindices(hydromodel.data,horizon,args...)
+    stagedata = (hydromodel.horizon,hydromodel.indices,hydromodel.data)
+    model = StochasticProgram(stagedata,stagedata,scenariotype(hydromodel.internalmodel))
+    transfer_scenarios!(model,hydromodel.internalmodel)
+    hydromodel.generator(model)
+    hydromodel.internalmodel = model
+    hydromodel.status[:rp] = :Unplanned
+    hydromodel.status[:evp] = :Unplanned
     return hydromodel
 end
 
@@ -180,11 +212,10 @@ macro hydromodel(variant,def)
         code
     elseif variant == :Stochastic
         code = @q begin
-            mutable struct $(esc(modelname)){$(esc(:D)) <: AbstractModelData, $(esc(:I)) <: AbstractModelIndices, $(esc(:S)) <: AbstractScenarioData} <: StochasticHydroModel
+            mutable struct $(esc(modelname)){$(esc(:D)) <: AbstractModelData, $(esc(:I)) <: AbstractModelIndices} <: StochasticHydroModel
                 horizon::Horizon
                 data::$(esc(:D))
                 indices::$(esc(:I))
-                scenarios::Vector{$(esc(:S))}
                 generator::Function
                 status::Dict{Symbol,Symbol}
                 internalmodel::JuMP.Model
@@ -194,11 +225,22 @@ macro hydromodel(variant,def)
                     generator = ($(esc(:model))) -> begin
                         $(esc(modeldef))
                     end
-                    indices = modelindices(data,horizon,scenarios,args...)
+                    indices = modelindices(data,horizon,args...)
                     I = typeof(indices)
-                    S = eltype(scenarios)
-                    hydromodel = new{D,I,S}(horizon,data,indices,scenarios,generator,Dict{Symbol,Symbol}(:rp=>:Unplanned,:evp=>:Unplanned))
-                    define_problem!(hydromodel)
+                    hydromodel = new{D,I}(horizon,data,indices,generator,Dict{Symbol,Symbol}(:rp=>:Unplanned,:evp=>:Unplanned))
+                    define_problem!(hydromodel,scenarios)
+                    return hydromodel
+                end
+
+                function (::$(esc(:Type)){$(esc(modelname))})(horizon::Horizon,data::AbstractModelData,sampler::AbstractSampler,n::Integer,args...)
+                    D = typeof(data)
+                    generator = ($(esc(:model))) -> begin
+                        $(esc(modeldef))
+                    end
+                    indices = modelindices(data,horizon,args...)
+                    I = typeof(indices)
+                    hydromodel = new{D,I}(horizon,data,indices,generator,Dict{Symbol,Symbol}(:rp=>:Unplanned,:evp=>:Unplanned))
+                    define_problem!(hydromodel,sampler,n)
                     return hydromodel
                 end
             end

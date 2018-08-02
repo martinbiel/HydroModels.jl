@@ -7,28 +7,31 @@ using StochasticPrograms
 using Clp
 using RecipesBase
 using Parameters
+using Reexport
 using MacroTools
 using MacroTools: postwalk, @q
+using MathProgBase
+using MathProgBase.SolverInterface
 
 import Base.show
-import MathProgBase.SolverInterface.AbstractMathProgSolver
-import MathProgBase.SolverInterface.status
-
-import Plots.font
-import Plots.text
-import Plots.Shape
 
 export
     AbstractModelIndices,
     AbstractModelData,
     Horizon,
-    ShortTermModel,
-    DayAheadModel,
+    HydroPlantCollection,
+    hydrodata,
+    plants_in_river,
+    plants_in_area,
+    plants_in_areas_and_rivers,
+    PriceCurve,
+    PriceData,
+    NordPoolPriceData,
+    expected,
     reload!,
     reinitialize!,
     plan!,
     production,
-    strategy,
     plants,
     discharge,
     spillage,
@@ -36,16 +39,16 @@ export
     power,
     revenue,
     totalrevenue,
-    singleorder,
-    singleorders,
-    blockorders,
-    independent,
-    dependent,
     Day,
     Week,
+    nhours,
+    ndays,
+    nweeks,
     @hydromodel,
     @deterministic,
-    @stochastic
+    @stochastic,
+    ShortTermModel,
+    DayAhead
 
 # Include files
 include("data/data.jl")
@@ -57,6 +60,5 @@ include("models/day-ahead/DayAhead.jl")
 
 # Analysis
 include("productionplan.jl")
-include("models/day-ahead/orderstrategy.jl")
 
 end # module

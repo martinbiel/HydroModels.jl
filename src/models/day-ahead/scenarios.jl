@@ -37,6 +37,10 @@ end
 
 function (sampler::DayAheadSampler)()
     ρ = rand(sampler.distribution,1)[:]
+    while any(ρ .<= 0)
+        # Ensure that prices are never negative
+        ρ = rand(sampler.distribution,1)[:]
+    end
     π = pdf(sampler.distribution,ρ)[1]
     return DayAheadScenario(π,PriceCurve(ρ))
 end

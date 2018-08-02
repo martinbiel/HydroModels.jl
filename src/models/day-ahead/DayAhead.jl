@@ -17,6 +17,7 @@ export
     DayAheadData,
     NordPoolDayAheadData,
     DayAheadScenario,
+    DayAheadScenarios,
     DayAheadSampler,
     DayAheadModel,
     strategy,

@@ -17,7 +17,7 @@ function DayAheadScenarios(data::DayAheadData,npricecurves::Integer)
     return scenarios
 end
 
-function StochasticPrograms.expected(scenarios::Vector{DayAheadScenario})
+function StochasticPrograms.expected(scenarios::Vector{<:DayAheadScenario})
     isempty(scenarios) && return DayAheadScenario(1.0,PriceCurve(zeros(24)))
     π = 1.0
     ρ = [mean([s.ρ[i] for s in scenarios]) for i in 1:nhours(Day())]

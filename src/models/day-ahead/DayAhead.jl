@@ -1,5 +1,9 @@
 @reexport module DayAhead
 
+# Standard library
+using Statistics
+using Printf
+
 using RecipesBase
 using Distributions
 using Parameters
@@ -7,11 +11,9 @@ using StochasticPrograms
 using HydroModels
 using HydroModels: AbstractHydroModel, River, Plant, Area, Scenario
 
-import HydroModels.modelindices
+import HydroModels: modelindices
 
-import Plots.font
-import Plots.text
-import Plots.Shape
+using Plots: font, text, Shape
 
 export
     DayAheadData,

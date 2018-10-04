@@ -24,7 +24,7 @@ end
 
 function DayAheadData(plantfilename::String,pricefilename::String,λ̱::AbstractFloat,λ̄::AbstractFloat)
     regulations = NordPoolRegulations()
-    bidprices = collect(linspace(λ̱,λ̄,3))
+    bidprices = collect(range(λ̱,stop=λ̄,length=3))
     prepend!(bidprices,regulations.lowerorderlimit)
     push!(bidprices,regulations.upperorderlimit)
     prices = PriceData(pricefilename)
@@ -33,7 +33,7 @@ end
 
 function NordPoolDayAheadData(plantfilename::String,pricefilename::String,area::Integer,λ̱::AbstractFloat,λ̄::AbstractFloat)
     regulations = NordPoolRegulations()
-    bidprices = collect(linspace(λ̱,λ̄,3))
+    bidprices = collect(range(λ̱,stop=λ̄,length=3))
     prepend!(bidprices,regulations.lowerorderlimit)
     push!(bidprices,regulations.upperorderlimit)
     prices = NordPoolPriceData(pricefilename,Day(),area)

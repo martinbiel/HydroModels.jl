@@ -60,7 +60,7 @@ function OrderStrategy(model::AbstractHydroModel)
     @assert length(blockprices) == JuMP.size(xb)[1] "Incorrect number of possible orders in block orders"
 
     # Accumulate orders per hour
-    single_orders = Vector{SingleOrder{eltype(prices)}}(nhours(horizon))
+    single_orders = Vector{SingleOrder{eltype(prices)}}(undef, nhours(horizon))
     for hour in 1:nhours(horizon)
         single_d = [xt_d[order,hour] for order = 1:length(prices)]
         single_orders[hour] = SingleOrder(hour,xt_i[hour],single_d,prices)
@@ -294,7 +294,7 @@ end
     ρ_max = !isempty(ρs) ? maximum(ρs) : []
     δρ = !isempty(ρs) ? mean(abs.(diff(ρs))) : []
 
-    rect(x,y,w,h) = Shape(x + [0,w,w,0,0],y + [0,0,h,h,0])
+    rect(x,y,w,h) = Shape(x .+ [0,w,w,0,0],y .+ [0,0,h,h,0])
     formatter = (d) -> begin
         if abs(d) <= sqrt(eps())
             text("0.0",font(annotationfontsize,"sans-serif",:white))
@@ -598,7 +598,7 @@ end
     ρ_min = !isempty(ρs) ? minimum(ρs) : []
     ρ_max = !isempty(ρs) ? maximum(ρs) : []
     δρ = !isempty(ρs) ? mean(abs.(diff(ρs))) : []
-    p_max = maximum([order.price for order in orders]) + δρ
+    p_max = maximum([order.price for order in orders]) .+ δρ
     highest = !isempty(ρs) ? max(p_max,ρ_max) : p_max
     levels = collect(1:1:length(orders))
     sorted = sort(orders,by=(order)->order.price)
@@ -620,7 +620,7 @@ end
     rejected_prices = []
     orderinfos = []
 
-    rect(x,y,w,h) = Shape(x + [0,w,w,0,0],y + [0,0,h,h,0])
+    rect(x,y,w,h) = Shape(x .+ [0,w,w,0,0],y .+ [0,0,h,h,0])
     if !isempty(ρs)
         accepted = find(o -> o.price <= mean(ρs[o.interval[1]+1:o.interval[2]]),orders)
         if isempty(accepted)

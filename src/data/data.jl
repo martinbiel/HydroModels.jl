@@ -8,14 +8,14 @@ Scenario = Int
 abstract type AbstractModelIndices end
 
 function plants(indices::AbstractModelIndices)
-    :plants ∈ fieldnames(indices) || error("Model indices do not contain hydro plants")
+    :plants ∈ fieldnames(typeof(indices)) || error("Model indices do not contain hydro plants")
     return indices.plants
 end
 
 abstract type AbstractModelData end
 
 function hydrodata(data::AbstractModelData)
-    :hydrodata ∈ fieldnames(data) || error("Model data does not contain hydro data")
+    :hydrodata ∈ fieldnames(typeof(data)) || error("Model data does not contain hydro data")
     return data.hydrodata
 end
 

@@ -1,0 +1,20 @@
+name = "HydroModels"
+uuid = "5f220b30-c7c8-11e8-1833-3d94ad568d35"
+authors = ["Martin Biel <martinbiel93@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+GLPKMathProgInterface = "3c7084bd-78ad-589a-b5bb-dbd673274bea"
+JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+MathProgBase = "fdba3010-5040-5b88-9595-932c9decdf73"
+Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+StochasticPrograms = "da0032aa-aa18-11e8-3e9c-4127ef7a7461"

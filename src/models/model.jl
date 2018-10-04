@@ -18,7 +18,7 @@ function status(hydromodel::AbstractHydroModel)
     return hydromodel.status
 end
 
-function plan!(hydromodel::AbstractHydroModel; optimsolver = ClpSolver())
+function plan!(hydromodel::AbstractHydroModel; optimsolver = GLPKSolverLP())
     setsolver(hydromodel.internalmodel,optimsolver)
     solvestatus = solve(hydromodel.internalmodel)
     if solvestatus == :Optimal
@@ -162,7 +162,7 @@ function reinitialize!(hydromodel::StochasticHydroModel, horizon::Horizon, args.
     return hydromodel
 end
 
-function plan!(hydromodel::StochasticHydroModel; variant = :rp, optimsolver = ClpSolver())
+function plan!(hydromodel::StochasticHydroModel; variant = :rp, optimsolver = GLPKSolverLP())
     solvestatus = if variant == :rp
         solve(hydromodel.internalmodel, solver=optimsolver)
     elseif variant == :evp

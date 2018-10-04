@@ -260,7 +260,7 @@ function define_model_parameters(collection::HydroPlantCollection{T}, plantdata:
 end
 
 function define_model_parameters(collection::HydroPlantCollection, plantfilename::String)
-    plantdata = readcsv(plantfilename)
+    plantdata = readdlm(plantfilename, ',')
     define_model_parameters(collection,plantdata[2:end,:])
 end
 

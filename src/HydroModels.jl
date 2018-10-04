@@ -1,10 +1,15 @@
 __precompile__()
 module HydroModels
 
+# Standard library
+using LinearAlgebra
+using DelimitedFiles
+using Printf
+
 # Packages
 using JuMP
 using StochasticPrograms
-using Clp
+using GLPKMathProgInterface
 using RecipesBase
 using Parameters
 using Reexport
@@ -14,6 +19,7 @@ using MathProgBase
 using MathProgBase.SolverInterface
 
 import Base.show
+import Statistics.mean
 
 export
     AbstractModelIndices,
@@ -31,6 +37,7 @@ export
     reload!,
     reinitialize!,
     plan!,
+    status,
     production,
     plants,
     discharge,

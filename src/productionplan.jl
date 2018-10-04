@@ -137,7 +137,7 @@ function totalrevenue(plan::HydroProductionPlan,λ::Vector{Float64})
     return plan.H⋅λ
 end
 
-function Base.mean(plans::Vector{HydroProductionPlan{T}}) where T <: AbstractFloat
+function mean(plans::Vector{HydroProductionPlan{T}}) where T <: AbstractFloat
     individual_plans = Dict{Plant,HydroPlan{T}}()
 
     for plant in plants(plans[1])

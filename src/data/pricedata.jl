@@ -6,9 +6,7 @@ struct PriceCurve{T <: AbstractFloat} <: AbstractVector{T}
         return new{T}(λ)
     end
 end
-Base.start(curve::PriceCurve) = start(curve.λ)
-Base.next(curve::PriceCurve, i) = next(curve.λ, i)
-Base.done(curve::PriceCurve, i) = done(curve.λ, i)
+Base.iterate(curve::PriceCurve) = iterate(curve.λ)
 Base.length(curve::PriceCurve) = length(curve.λ)
 Base.size(curve::PriceCurve) = size(curve.λ)
 @inline function Base.getindex(curve::PriceCurve, I...)
@@ -23,8 +21,7 @@ end
     @boundscheck checkbounds(curve.λ, I...)
     @inbounds curve.λ[I...] = x
 end
-Base.indices(curve::PriceCurve) = indices(curve.λ)
-Base.linearindices(curve::PriceCurve) = linearindices(curve.λ)
+Base.axes(curve::PriceCurve) = axes(curve.λ)
 Base.IndexStyle(::Type{<:PriceCurve}) = Base.IndexLinear()
 
 horizon(curve::PriceCurve) = Horizon(length(curve.λ))
@@ -60,7 +57,7 @@ struct PriceData{T <: AbstractFloat}
     function (::Type{PriceData})(P::AbstractVector,horizon::Horizon)
         T = eltype(P)
         available = div(length(P),nhours(horizon))
-        curves = Vector{PriceCurve{T}}(available)
+        curves = Vector{PriceCurve{T}}(undef, available)
         for i = 1:available
             curves[i] = PriceCurve(P[((i-1)*nhours(horizon)+1):i*nhours(horizon)])
         end
@@ -74,16 +71,16 @@ expected(pricedata::PriceData) = mean(expected.(pricedata.curves))
 Base.getindex(pricedata::PriceData,i::Integer) = pricedata.curves[i]
 
 function PriceData(filename::String)
-    P = readcsv(filename)
+    P = readdlm(filename, ',')
     return PriceData(convert(Matrix{Float64},P[2:end,:]))
 end
 
 function PriceData(filename::String,curvehorizon::Horizon)
-    P = readcsv(filename)
+    P = readdlm(filename, ',')
     return PriceData(convert(Matrix{Float64},P[2:end,:]),curvehorizon)
 end
 
 function NordPoolPriceData(filename::String,curvehorizon::Horizon,area::Integer)
-    P = readcsv(filename)
+    P = readdlm(filename, ',')
     return PriceData(convert(Vector{Float64},P[4:end,3+area]),curvehorizon)
 end

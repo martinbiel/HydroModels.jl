@@ -19,7 +19,7 @@
                     )
         # Maximal bids
         @constraint(model, maxhourlybids[t = hours],
-                    xt_i[t] + xt_d[bids[end],t] + sum(xb[i,b] for i = blockbids for b = find(A->in(t,A),hours_per_block)) <= 1.1*sum(hdata[p].H̄ for p in plants)
+                    xt_i[t] + xt_d[bids[end],t] + sum(xb[i,b] for i = blockbids for b = findall(A->in(t,A),hours_per_block)) <= 1.1*sum(hdata[p].H̄ for p in plants)
                     )
     end
 
@@ -33,8 +33,14 @@
         ph = data.bidprices
         pb = ph[2:end-1]
         @unpack ρ = scenario
-        ih(t) = findlast(ph .<= ρ[t])
-        ib(b) = findlast(pb .<= mean(ρ[hours_per_block[b]]))
+        ih(t) = begin
+            idx = findlast(ph .<= ρ[t])
+            return idx == nothing ? -1 : idx
+        end
+        ib(b) = begin
+            idx = findlast(pb .<= mean(ρ[hours_per_block[b]]))
+            return idx == nothing ? -1 : idx
+        end
         # Variables
         # =======================================================
         # First stage
@@ -108,7 +114,7 @@
                     )
         # Load balance
         @constraint(model, loadbalance[t = hours],
-                    yt[t] + sum(yb[b] for b = find(A->in(t,A),hours_per_block)) - H[t] == z_up[t] - z_do[t]
+                    yt[t] + sum(yb[b] for b = findall(A->in(t,A),hours_per_block)) - H[t] == z_up[t] - z_do[t]
                     )
         # Water flow: Discharge + Spillage
         @constraintref Qflow[1:length(plants),1:nhours(horizon)]

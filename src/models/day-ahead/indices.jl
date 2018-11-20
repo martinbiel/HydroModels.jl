@@ -9,7 +9,7 @@ struct DayAheadIndices <: AbstractModelIndices
 end
 plants(indices::DayAheadIndices) = indices.plants
 
-function modelindices(data::DayAheadData, horizon::Horizon, areas::Vector{Area}, rivers::Vector{River})
+function HydroModels.modelindices(data::DayAheadData, horizon::Horizon, areas::Vector{Area}, rivers::Vector{River})
     hours = collect(1:nhours(horizon))
     plants = plants_in_areas_and_rivers(hydrodata(data),areas,rivers)
     if isempty(plants)

@@ -37,5 +37,5 @@ function NordPoolDayAheadData(plantfilename::String,pricefilename::String,area::
     prepend!(bidprices,regulations.lowerorderlimit)
     push!(bidprices,regulations.upperorderlimit)
     prices = NordPoolPriceData(pricefilename,Day(),area)
-    DayAheadData(HydroPlantCollection(plantfilename),regulations,bidprices,prices,expected(prices))
+    DayAheadData(HydroPlantCollection(plantfilename),regulations,bidprices,prices,HydroModels.expected(prices))
 end

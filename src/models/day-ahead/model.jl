@@ -157,12 +157,12 @@
     end
 end
 
-DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},area::Area,river::River) = DayAheadModel(Day(),modeldata,scenarios,[area],[river])
-DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},area::Area) = DayAheadModel(Day(),modeldata,scenarios,[area],[:All])
-DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},areas::Vector{Area}) = DayAheadModel(Day(),modeldata,scenarios,areas,[:All])
-DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},river::River) = DayAheadModel(Day(),modeldata,scenarios,[0],[river])
-DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},rivers::Vector{River}) = DayAheadModel(Day(),modeldata,scenarios,[0],rivers)
-DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenarioData}) = DayAheadModel(Day(),modeldata,scenarios,[0],[:All])
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenario},area::Area,river::River) = DayAheadModel(Day(),modeldata,scenarios,[area],[river])
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenario},area::Area) = DayAheadModel(Day(),modeldata,scenarios,[area],[:All])
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenario},areas::Vector{Area}) = DayAheadModel(Day(),modeldata,scenarios,areas,[:All])
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenario},river::River) = DayAheadModel(Day(),modeldata,scenarios,[0],[river])
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenario},rivers::Vector{River}) = DayAheadModel(Day(),modeldata,scenarios,[0],rivers)
+DayAheadModel(modeldata::AbstractModelData,scenarios::Vector{<:AbstractScenario}) = DayAheadModel(Day(),modeldata,scenarios,[0],[:All])
 
 DayAheadModel(modeldata::AbstractModelData,sampler::AbstractSampler,n::Integer,area::Area,river::River) = DayAheadModel(Day(),modeldata,sampler,n,[area],[river])
 DayAheadModel(modeldata::AbstractModelData,sampler::AbstractSampler,n::Integer,area::Area) = DayAheadModel(Day(),modeldata,sampler,n,[area],[:All])

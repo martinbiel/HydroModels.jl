@@ -114,7 +114,7 @@ function define_problem!(hydromodel::StochasticHydroModel)
     nothing
 end
 
-function define_problem!(hydromodel::StochasticHydroModel,scenarios::Vector{<:AbstractScenarioData})
+function define_problem!(hydromodel::StochasticHydroModel,scenarios::Vector{<:AbstractScenario})
     stagedata = (hydromodel.horizon,hydromodel.indices,hydromodel.data)
     model = StochasticProgram(stagedata,stagedata,scenarios)
     hydromodel.generator(model)
@@ -135,7 +135,7 @@ function define_problem!(hydromodel::StochasticHydroModel,sampler::AbstractSampl
     nothing
 end
 
-function reload!(hydromodel::StochasticHydroModel, data::AbstractModelData, scenarios::Vector{<:AbstractScenarioData}, args...)
+function reload!(hydromodel::StochasticHydroModel, data::AbstractModelData, scenarios::Vector{<:AbstractScenario}, args...)
     hydromodel.data = data
     hydromodel.indices = modelindices(hydromodel.data,horizon,args...)
     define_problem!(hydromodel,scenarios)
@@ -218,9 +218,9 @@ macro hydromodel(variant,def)
                 indices::$(esc(:I))
                 generator::Function
                 status::Dict{Symbol,Symbol}
-                internalmodel::JuMP.Model
+                internalmodel::StochasticProgram
 
-                function (::$(esc(:Type)){$(esc(modelname))})(horizon::Horizon,data::AbstractModelData,scenarios::Vector{<:AbstractScenarioData},args...)
+                function (::$(esc(:Type)){$(esc(modelname))})(horizon::Horizon,data::AbstractModelData,scenarios::Vector{<:AbstractScenario},args...)
                     D = typeof(data)
                     generator = ($(esc(:model))) -> begin
                         $(esc(modeldef))

@@ -16,7 +16,7 @@ function ShortTermData(plantfilename::String,pricecurve::PriceCurve)
     ShortTermData(HydroPlantCollection(plantfilename),pricecurve)
 end
 
-function modelindices(data::ShortTermData,horizon::Horizon,areas::Vector{Area},rivers::Vector{River})
+function modelindices(data::ShortTermData, horizon::Horizon; areas::Vector{Area} = [0], rivers::Vector{River} = [:All])
     hours = collect(1:nhours(horizon))
     plants = plants_in_areas_and_rivers(hydrodata(data),areas,rivers)
     if isempty(plants)
@@ -122,17 +122,3 @@ end
                             for p = plants, s = segments)
                 )
 end
-
-ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,area::Area,river::River) = ShortTermModel(horizon,modeldata,[area],[river])
-ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,area::Area) = ShortTermModel(horizon,modeldata,[area],[:All])
-ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,areas::Vector{Area}) = ShortTermModel(horizon,modeldata,areas,[:All])
-ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,river::River) = ShortTermModel(horizon,modeldata,[0],[river])
-ShortTermModel(horizon::Horizon,modeldata::AbstractModelData,rivers::Vector{River}) = ShortTermModel(horizon,modeldata,[0],rivers)
-ShortTermModel(horizon::Horizon,modeldata::AbstractModelData) = ShortTermModel(horizon,modeldata,[0],[:All])
-
-reinitialize!(hydromodel::ShortTermModel,horizon::Horizon,area::Area,river::River) = reinitialize!(hydromodel,horizon,[area],[river])
-reinitialize!(hydromodel::ShortTermModel,area::Area,river::River) = reinitialize!(hydromodel,horizon(hydromodel),[area],[river])
-reinitialize!(hydromodel::ShortTermModel,horizon::Horizon,river::River) = reinitialize!(hydromodel,horizon,[0],[river])
-reinitialize!(hydromodel::ShortTermModel,river::River) = reinitialize!(hydromodel,horizon(hydromodel),[0],[river])
-reinitialize!(hydromodel::ShortTermModel,horizon::Horizon,rivers::Vector{River}) = reinitialize!(hydromodel,horizon,[0],rivers)
-reinitialize!(hydromodel::ShortTermModel,rivers::Vector{River}) = reinitialize!(hydromodel,horizon(hydromodel),[0],rivers)

@@ -4,6 +4,7 @@ module HydroModels
 # Standard library
 using LinearAlgebra
 using DelimitedFiles
+using Dates
 using Printf
 
 # Packages
@@ -17,6 +18,10 @@ using MacroTools
 using MacroTools: postwalk, @q
 using MathProgBase
 using MathProgBase.SolverInterface
+using DelimitedFiles
+using Flux
+using BSON
+using BSON: @save, @load
 
 import Base.show
 import Statistics.mean
@@ -30,10 +35,18 @@ export
     plants_in_river,
     plants_in_area,
     plants_in_areas_and_rivers,
+    PolyhedralWaterValue,
+    cuts,
+    ncuts,
+    lower_bound,
     PriceCurve,
     PriceData,
+    Forecaster,
+    PriceForecaster,
+    FlowForecaster,
+    forecast,
     NordPoolPriceData,
-    expected,
+    mean_price,
     reload!,
     reinitialize!,
     plan!,
@@ -55,7 +68,8 @@ export
     @deterministic,
     @stochastic,
     ShortTermModel,
-    DayAhead
+    DayAhead,
+    WeekAhead
 
 # Include files
 include("data/data.jl")
@@ -64,6 +78,8 @@ include("models/model.jl")
 # Models
 include("models/short-term/ShortTerm.jl")
 include("models/day-ahead/DayAhead.jl")
+include("models/week-ahead/WeekAhead.jl")
+include("models/empty_reservoirs/EmptyReservoirs.jl")
 
 # Analysis
 include("productionplan.jl")

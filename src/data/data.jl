@@ -1,7 +1,9 @@
 include("horizon.jl")
 include("segmenter.jl")
 include("hydrodata.jl")
+include("water_value.jl")
 include("pricedata.jl")
+include("forecaster.jl")
 
 Scenario = Int
 
@@ -19,4 +21,4 @@ function hydrodata(data::AbstractModelData)
     return data.hydrodata
 end
 
-modelindices(data::AbstractModelData,args...) = error("No definition of modelindices for ", typeof(data), " with arguments: ", args...)
+modelindices(data::AbstractModelData; kw...) = error("No definition of modelindices for ", typeof(data), " with arguments: ", args...)

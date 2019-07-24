@@ -1,4 +1,4 @@
-@reexport module DayAhead
+@reexport module EmptyReservoirs
 
 # Standard library
 using Statistics
@@ -18,23 +18,14 @@ import HydroModels: modelindices
 using Plots: font, text, Shape
 
 export
-    DayAheadData,
-    NordPoolDayAheadData,
-    DayAheadScenario,
-    DayAheadScenarios,
-    DayAheadSampler,
-    DayAheadModel,
-    strategy,
-    singleorder,
-    singleorders,
-    blockorders,
-    independent,
-    dependent
+    EmptyReservoirsData,
+    EmptyReservoirsScenario,
+    EmptyReservoirsSampler,
+    EmptyReservoirsModel
 
 include("data.jl")
 include("scenarios.jl")
 include("indices.jl")
 include("model.jl")
-include("orderstrategy.jl")
 
 end

@@ -1,5 +1,4 @@
-@hydromodel Stochastic DayAhead = begin
-    @fixhorizon Day()
+@hydromodel Stochastic EmptyReservoirs = begin
     # First stage
     # ========================================================
     @stage 1 begin
@@ -8,22 +7,11 @@
             indices
             data
         end
-        @unpack hours, plants, bids = indices
-        @unpack hydrodata, regulations = data
+        @unpack plants = indices
+        @unpack hydrodata = data
         # Variables
         # ========================================================
-        @variable(model, xt_i[t = hours] >= 0)
-        @variable(model, xt_d[i = bids, t = hours] >= 0)
-        # Constraints
-        # ========================================================
-        # Increasing bid curve
-        @constraint(model, bidcurve[i = bids[1:end-1], t = hours],
-                    xt_d[i,t] <= xt_d[i+1,t]
-                    )
-        # Maximal bids
-        @constraint(model, maxhourlybids[t = hours],
-                    xt_i[t] + xt_d[bids[end],t] <= 1.1*sum(hydrodata[p].H̄ for p in plants)
-                    )
+        @variable(model, M₀[p = plants], lowerbound = 0, upperbound = hydrodata[p].M̄)
     end
     # Second stage
     # =======================================================
@@ -34,71 +22,37 @@
             data
         end
         @unpack hours, plants, segments = indices
-        @unpack hydrodata, water_value, regulations, intraday_trading, bidprices = data
-        @uncertain ρ from ξ::DayAheadScenario
-        Q̃ = mean_flows(ξ, plants)
-        V = local_inflows(ξ, plants, hydrodata.Qu)
-        ih(t) = begin
-            idx = findlast(bidprices .<= ρ[t])
-            return idx == nothing ? -1 : idx
-        end
+        @unpack hydrodata = data
+        @uncertain ρ from EmptyReservoirsScenario
         # Variables
         # =======================================================
         # First stage
-        @decision xt_i xt_d
+        @decision M₀
         # -------------------------------------------------------
-        @variable(model, yt[t = hours] >= 0)
-        if intraday_trading
-            @variable(model, z_up[t = hours] >= 0)
-            @variable(model, z_do[t = hours] >= 0)
-        end
         @variable(model, Q[p = plants, s = segments, t = hours], lowerbound = 0, upperbound = hydrodata[p].Q̄[s])
         @variable(model, S[p = plants, t = hours] >= 0)
         @variable(model, M[p = plants, t = hours], lowerbound = 0, upperbound = hydrodata[p].M̄)
-        @variable(model, W)
         @variable(model, H[t = hours] >= 0)
         @variable(model, Qf[p = plants, t = hours] >= 0)
         @variable(model, Sf[p = plants, t = hours] >= 0)
-
         # Objectives
         # ========================================================
         # Net profit
         @expression(model, net_profit,
-                    sum((ρ[t]-0.04)*yt[t]
+                    sum(ρ[t]*H[t]
                         for t = hours))
-        # Intraday
-        @expression(model, intraday,
-                   sum(penalty(scenario,t)*z_up[t] - reward(scenario,t)*z_do[t]
-                        for t = hours))
-        # Value of stored water
-        @expression(model, value_of_stored_water, -W)
-        # Define objective
-        if intraday_trading
-            @objective(model, Max, net_profit - intraday + value_of_stored_water)
-        else
-            @objective(model, Max, net_profit + value_of_stored_water)
-        end
-
+        @objective(model, Max, net_profit)
         # Constraints
         # ========================================================
-        # Bid-dispatch links
-        @constraint(model, hourlybids[t = hours],
-                    yt[t] == ((ρ[t] - bidprices[ih(t)])/(bidprices[ih(t)+1]-bidprices[ih(t)]))*xt_d[ih(t)+1,t]
-                         + ((bidprices[ih(t)+1]-ρ[t])/(bidprices[ih(t)+1]-bidprices[ih(t)]))*xt_d[ih(t),t]
-                         + xt_i[t]
-                    )
-
         # Hydrological balance
         @constraint(model, hydro_constraints[p = plants, t = hours],
                     # Previous reservoir content
-                    M[p,t] == (t > 1 ? M[p,t-1] : hydrodata[p].M₀)
+                    M[p,t] == (t > 1 ? M[p,t-1] : M₀[p])
                     # Inflow
                     + sum(Qf[i,t]
                           for i = intersect(hydrodata.Qu[p],plants))
                     + sum(Sf[i,t]
                           for i = intersect(hydrodata.Su[p],plants))
-                    # Local inflow
-                    + V[p]
                     # Outflow
                     - sum(Q[p,s,t]
                           for s = segments)
@@ -109,16 +63,6 @@
                     H[t] == sum(hydrodata[p].μ[s]*Q[p,s,t]
                                 for p = plants, s = segments)
                     )
-        # Load balance
-        if intraday_trading
-            @constraint(model, loadbalance[t = hours],
-                        yt[t] - H[t] == z_up[t] - z_do[t]
-                        )
-        else
-            @constraint(model, loadbalance[t = hours],
-                        yt[t] == H[t]
-                        )
-        end
         # Water flow: Discharge + Spillage
         @constraintref Qflow[1:length(plants),1:nhours(horizon)]
         @constraintref Sflow[1:length(plants),1:nhours(horizon)]
@@ -127,9 +71,9 @@
                 if t - hydrodata[p].Rqh > 1
                     Qflow[pidx,t] = @constraint(model,
                                                 Qf[p,t] == (hydrodata[p].Rqm/60)*sum(Q[p,s,t-(hydrodata[p].Rqh+1)]
-                                                                                     for s = segments)
+                                                                                 for s = segments)
                                                 + (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                                                              for s = segments)
+                                                                          for s = segments)
                                                 )
                 elseif t - hydrodata[p].Rqh > 0
                     Qflow[pidx,t] = @constraint(model,
@@ -157,8 +101,9 @@
                 end
             end
         end
-        # Water value
-        @constraint(model, water_value_approximation[c = 1:ncuts(water_value)],
-                    sum(water_value[c][p]*M[p,nhours(horizon)] for p in plants) + W >= lower_bound(water_value[c]))
     end
+end
+
+function EmptyReservoirsModel(data::AbstractModelData, args...; kw...)
+    return EmptyReservoirsModel(maximum_horizon(data), data, args...; kw...)
 end

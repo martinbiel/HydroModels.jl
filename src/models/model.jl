@@ -112,21 +112,35 @@ function reload!(hydromodel::StochasticHydroModel, horizon::Horizon, data::Abstr
     return hydromodel
 end
 
-function reload!(hydromodel::StochasticHydroModel, horizon::Horizon, data::AbstractModelData, n::Integer, args...)
-    StochasticPrograms.remove_subproblems!(hydromodel.internalmodel)
-    sample!(hydromodel.internalmodel, n)
+function reload!(hydromodel::StochasticHydroModel, horizon::Horizon, data::AbstractModelData, sampler::AbstractSampler, n::Integer; kw...)
     hydromodel.data = data
-    reinitialize!(hydromodel, horizon, args...)
+    reinitialize!(hydromodel, horizon, sampler, n; kw...)
     return hydromodel
 end
 
-function reinitialize!(hydromodel::StochasticHydroModel, horizon::Horizon, args...)
+function reinitialize!(hydromodel::StochasticHydroModel, horizon::Horizon; kw...)
     hydromodel.horizon = horizon
-    hydromodel.indices = modelindices(hydromodel.data, horizon, args...)
-    stagedata = (hydromodel.horizon, hydromodel.indices, hydromodel.data)
-    set_first_stage_data!(hydromodel.stochasticmodel, stagedata)
-    set_second_stage_data!(hydromodel.stochasticmodel, stagedata)
-    hydromodel.stochasticmodel.generator(hydromodel.internalmodel)
+    hydromodel.indices = modelindices(hydromodel.data, horizon; kw...)
+    scenariodata = scenarios(hydromodel.internalmodel)
+    hydromodel.internalmodel = instantiate(hydromodel.stochasticmodel,
+                                           scenariodata;
+                                           horizon = hydromodel.horizon,
+                                           indices = hydromodel.indices,
+                                           data = hydromodel.data)
+    hydromodel.status[:rp] = :Unplanned
+    hydromodel.status[:evp] = :Unplanned
+    return hydromodel
+end
+
+function reinitialize!(hydromodel::StochasticHydroModel, horizon::Horizon, sampler::AbstractSampler, n::Integer; kw...)
+    hydromodel.horizon = horizon
+    hydromodel.indices = modelindices(hydromodel.data, horizon; kw...)
+    hydromodel.internalmodel = SAA(hydromodel.stochasticmodel,
+                                   sampler,
+                                   n;
+                                   horizon = hydromodel.horizon,
+                                   indices = hydromodel.indices,
+                                   data = hydromodel.data)
     hydromodel.status[:rp] = :Unplanned
     hydromodel.status[:evp] = :Unplanned
     return hydromodel
@@ -155,10 +169,30 @@ plan_evp!(hydromodel::StochasticHydroModel) = plan!(hydromodel,:evp)
 macro hydromodel(variant,def)
     @capture(def,name_Symbol = modeldef_) || error("Invalid syntax. Expected modelname = begin JuMPdef end")
     modelname = Symbol(name,:Model)
-
+    # Fix horizon if applicable
+    fixhorizondef = Expr(:block)
+    modeldef = postwalk(modeldef) do x
+        @capture(x, @fixhorizon horizon_) || return x
+        fixhorizondef = @q begin
+            function $(esc(modelname))(data::AbstractModelData, args...; kw...)
+                return $(esc(modelname))($horizon, data, args...; kw...)
+            end
+            function reload!(hydromodel::$(esc(modelname)), args...; kw...)
+                reload!(hydromodel, $horizon, args...; kw...)
+                return hydromodel
+            end
+            function reinitialize!(hydromodel::$(esc(modelname)), args...; kw...)
+                reinitialize!(hydromodel, $horizon, args...; kw...)
+                return hydromodel
+            end
+        end
+        return :()
+    end
+    # Define new deterministic/stochastic model type
     code = if variant == :Deterministic
         code = @q begin
-            mutable struct $(esc(modelname)){$(esc(:D)) <: AbstractModelData, $(esc(:I)) <: AbstractModelIndices} <: DeterministicHydroModel
+            mutable struct $(esc(modelname)){$(esc(:D)) <: AbstractModelData,
+                                             $(esc(:I)) <: AbstractModelIndices} <: DeterministicHydroModel
                 horizon::Horizon
                 data::$(esc(:D))
                 indices::$(esc(:I))
@@ -166,58 +200,69 @@ macro hydromodel(variant,def)
                 status::Symbol
                 internalmodel::JuMP.Model
 
-                function (::$(esc(:Type)){$(esc(modelname))})(horizon::Horizon,data::AbstractModelData,args...)
+                function $(esc(modelname))(horizon::Horizon, data::AbstractModelData; args...)
                     D = typeof(data)
-                    generator = ($(esc(:model)),$(esc(:horizon)),$(esc(:data)),$(esc(:indices))) -> begin
+                    generator = ($(esc(:model)), $(esc(:horizon)), $(esc(:data)), $(esc(:indices))) -> begin
                         $(esc(modeldef))
                     end
-                    indices = modelindices(data,horizon,args...)
+                    indices = modelindices(data, horizon; kw...)
                     I = typeof(indices)
-                    hydromodel = new{D,I}(horizon,data,indices,generator,:Unplanned)
+                    hydromodel = new{D,I}(horizon, data, indices, generator, :Unplanned)
                     define_problem!(hydromodel)
                     return hydromodel
                 end
             end
+            $fixhorizondef
         end
         code
     elseif variant == :Stochastic
+        modeldef = @q begin
+            @stochastic_model begin
+                $modeldef
+            end
+        end
         code = @q begin
-            mutable struct $(esc(modelname)){$(esc(:D)) <: AbstractModelData, $(esc(:I)) <: AbstractModelIndices, $(esc(:SP)) <: StochasticProgram} <: StochasticHydroModel
+            mutable struct $(esc(modelname)){$(esc(:D)) <: AbstractModelData,
+                                             $(esc(:I)) <: AbstractModelIndices,
+                                             $(esc(:SM)) <: StochasticModel,
+                                             $(esc(:SP)) <: StochasticProgram} <: StochasticHydroModel
                 horizon::Horizon
                 data::$(esc(:D))
                 indices::$(esc(:I))
-                stochasticmodel::StochasticModel
-                status::Dict{Symbol,Symbol}
+                stochasticmodel::$(esc(:SM))
                 internalmodel::$(esc(:SP))
+                status::Dict{Symbol,Symbol}
 
-                function (::$(esc(:Type)){$(esc(modelname))})(horizon::Horizon,data::AbstractModelData,scenarios::Vector{<:AbstractScenario},args...)
+                function $(esc(modelname))(horizon::Horizon,
+                                           data::AbstractModelData,
+                                           scenarios::Vector{<:AbstractScenario}; kw...)
                     D = typeof(data)
-                    indices = modelindices(data,horizon,args...)
+                    indices = modelindices(data, horizon; kw...)
                     I = typeof(indices)
-                    stagedata = (horizon, indices, data)
-                    stochasticmodel = StochasticModel(stagedata, stagedata, $(esc(:model)) -> begin
-                        $(esc(modeldef))
-                    end)
-                    sp = instantiate(stochasticmodel, scenarios)
+                    stochasticmodel = $(esc(modeldef))
+                    SM = typeof(stochasticmodel)
+                    sp = instantiate(stochasticmodel, scenarios; horizon = horizon, indices = indices, data = data)
                     SP = typeof(sp)
-                    hydromodel = new{D,I,SP}(horizon, data, indices, stochasticmodel, Dict{Symbol,Symbol}(:rp=>:Unplanned,:evp=>:Unplanned), sp)
+                    hydromodel = new{D,I,SM,SP}(horizon, data, indices, stochasticmodel, sp, Dict(:rp=>:Unplanned,:evp=>:Unplanned))
                     return hydromodel
                 end
 
-                function (::$(esc(:Type)){$(esc(modelname))})(horizon::Horizon, data::AbstractModelData, sampler::AbstractSampler{S}, n::Integer, args...) where S <: AbstractScenario
+                function $(esc(modelname))(horizon::Horizon,
+                                           data::AbstractModelData,
+                                           sampler::AbstractSampler{S},
+                                           n::Integer; kw...) where S <: AbstractScenario
                     D = typeof(data)
-                    indices = modelindices(data, horizon, args...)
+                    indices = modelindices(data, horizon; kw...)
                     I = typeof(indices)
-                    stagedata = (horizon, indices, data)
-                    stochasticmodel = StochasticModel(stagedata, stagedata, $(esc(:model)) -> begin
-                        $(esc(modeldef))
-                    end)
-                    saa = SAA(stochasticmodel, sampler, n)
+                    stochasticmodel = $(esc(modeldef))
+                    SM = typeof(stochasticmodel)
+                    saa = SAA(stochasticmodel, sampler, n; horizon = horizon, indices = indices, data = data)
                     SP = typeof(saa)
-                    hydromodel = new{D,I,SP}(horizon, data, indices, stochasticmodel, Dict{Symbol,Symbol}(:rp=>:Unplanned,:evp=>:Unplanned), saa)
+                    hydromodel = new{D,I,SM,SP}(horizon, data, indices, stochasticmodel, saa, Dict(:rp=>:Unplanned,:evp=>:Unplanned))
                     return hydromodel
                 end
             end
+            $fixhorizondef
         end
         code
     else

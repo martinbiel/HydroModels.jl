@@ -37,7 +37,7 @@ function mean_flows(scenario::DayAheadScenario, plants::Vector{Plant})
     return mean_flows
 end
 
-function calculate_inflow(plant::Plant,w::Dict{Plant,<:AbstractFloat},upstream_plants::Vector{Plant})
+function calculate_inflow(plant::Plant, w::Dict{Plant,<:AbstractFloat}, upstream_plants::Vector{Plant})
     V = w[plant]
     if !isempty(upstream_plants)
         V -= sum(w[p] for p in upstream_plants)
@@ -79,22 +79,3 @@ end
         return DayAheadScenario(PriceCurve(price_curve), flows[:, 2])
     end
 end
-
-# struct DayAheadSampler <: AbstractSampler{DayAheadScenario}
-#     distribution::FullNormal
-
-#     function (::Type{DayAheadSampler})(data::DayAheadData)
-#         distribution = fit(MvNormal,reduce(hcat,[c.λ for c in data.pricedata.curves]))
-#         return new(distribution)
-#     end
-# end
-
-# function (sampler::DayAheadSampler)()
-#     ρ = rand(sampler.distribution,1)[:]
-#     while any(ρ .<= 0)
-#         # Ensure that prices are never negative
-#         ρ = rand(sampler.distribution,1)[:]
-#     end
-#     π = pdf(sampler.distribution,ρ)[1]
-#     return DayAheadScenario(π,PriceCurve(ρ))
-# end

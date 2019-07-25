@@ -797,7 +797,7 @@ end
     end
 end
 
-function strategy(model::DayAheadModel; variant = :rp)
+function strategy(model::StochasticHydroModel; variant = :rp)
     status(model; variant = variant) == :Planned || error("Hydro model has not been planned yet")
     return OrderStrategy(model)
 end

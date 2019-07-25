@@ -11,7 +11,7 @@ using Parameters
 using StochasticPrograms
 using Flux
 using HydroModels
-using HydroModels: AbstractHydroModel, River, Plant, Area, Scenario, Forecaster, forecast
+using HydroModels: AbstractHydroModel, StochasticHydroModel, River, Plant, Area, Scenario, Forecaster, forecast
 
 import HydroModels: modelindices
 

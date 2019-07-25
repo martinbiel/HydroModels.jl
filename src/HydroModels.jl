@@ -59,8 +59,6 @@ export
     power,
     revenue,
     totalrevenue,
-    Day,
-    Week,
     nhours,
     ndays,
     nweeks,
@@ -76,10 +74,10 @@ include("data/data.jl")
 include("models/model.jl")
 
 # Models
-include("models/short-term/ShortTerm.jl")
+#include("models/short-term/ShortTerm.jl")
 include("models/day-ahead/DayAhead.jl")
 include("models/week-ahead/WeekAhead.jl")
-include("models/empty_reservoirs/EmptyReservoirs.jl")
+#include("models/empty_reservoirs/EmptyReservoirs.jl")
 
 # Analysis
 include("productionplan.jl")

@@ -62,20 +62,20 @@ end
 #     end
 # end
 
-@sampler RecurrentDayAheadSampler = begin
+struct RecurrentDayAheadSampler <: AbstractSampler{DayAheadScenario}
     date::Date
     price_forecaster::Forecaster{:price}
     flow_forecaster::Forecaster{:flow}
+end
 
-    @sample DayAheadScenario begin
+function (sampler::RecurrentDayAheadSampler)()
+    price_curve = forecast(sampler.price_forecaster, month(sampler.date))
+    while !all(price_curve .>= 0)
         price_curve = forecast(sampler.price_forecaster, month(sampler.date))
-        while !all(price_curve .>= 0)
-            price_curve = forecast(sampler.price_forecaster, month(sampler.date))
-        end
-        flows = forecast(sampler.flow_forecaster, week(sampler.date))
-        while !all(flows[:, 2] .>= 0)
-            flows = forecast(sampler.flow_forecaster, week(sampler.date))
-        end
-        return DayAheadScenario(PriceCurve(price_curve), flows[:, 2])
     end
+    flows = forecast(sampler.flow_forecaster, week(sampler.date))
+    while !all(flows[:, 2] .>= 0)
+        flows = forecast(sampler.flow_forecaster, week(sampler.date))
+    end
+    return DayAheadScenario(PriceCurve(price_curve), flows[:, 2])
 end

@@ -48,26 +48,26 @@ function calculate_inflow(plant::Plant, w::Dict{Plant,<:AbstractFloat}, upstream
     return max(0, V)
 end
 
-@sampler RecurrentWeekAheadSampler = begin
+struct RecurrentWeekAheadSampler <: AbstractSampler{WeekAheadScenario}
     date::Date
     price_forecaster::Forecaster{:price}
     flow_forecaster::Forecaster{:flow}
+end
 
-    @sample WeekAheadScenario begin
-        price_curve = Vector{Float64}()
-        for d = 1:7
+function (sampler::RecurrentWeekAheadSampler)()
+    price_curve = Vector{Float64}()
+    for d = 1:7
+        daily_curve = forecast(sampler.price_forecaster, month(sampler.date))
+        while !all(daily_curve .>= 0)
             daily_curve = forecast(sampler.price_forecaster, month(sampler.date))
-            while !all(daily_curve .>= 0)
-                daily_curve = forecast(sampler.price_forecaster, month(sampler.date))
-            end
-            append!(price_curve, daily_curve)
         end
-        flows = forecast(sampler.flow_forecaster, week(sampler.date))
-        while !all(flows[:, 2] .>= 0)
-            flows = forecast(sampler.flow_forecaster, week(sampler.date))
-        end
-        return WeekAheadScenario(PriceCurve(price_curve), flows)
+        append!(price_curve, daily_curve)
     end
+    flows = forecast(sampler.flow_forecaster, week(sampler.date))
+    while !all(flows[:, 2] .>= 0)
+        flows = forecast(sampler.flow_forecaster, week(sampler.date))
+    end
+    return WeekAheadScenario(PriceCurve(price_curve), flows)
 end
 
 # struct DayAheadSampler <: AbstractSampler{DayAheadScenario}

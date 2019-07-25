@@ -45,7 +45,6 @@ export
     PriceForecaster,
     FlowForecaster,
     forecast,
-    NordPoolPriceData,
     mean_price,
     reload!,
     reinitialize!,
@@ -62,12 +61,13 @@ export
     nhours,
     ndays,
     nweeks,
-    @hydromodel,
-    @deterministic,
-    @stochastic,
-    ShortTermModel,
     DayAhead,
     WeekAhead
+
+macro exportSPjl()
+    Expr(:export, names(StochasticPrograms)...)
+end
+@exportSPjl
 
 # Include files
 include("data/data.jl")

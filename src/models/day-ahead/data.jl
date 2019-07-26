@@ -27,7 +27,7 @@ end
 
 function DayAheadData(plantfilename::String, watervalue_filename::String, λ::AbstractFloat, λ̱::AbstractFloat, λ̄::AbstractFloat)
     plantdata = HydroPlantCollection(plantfilename)
-    water_value = PolyhedralWaterValue(plantdata.plants, watervalue_filename)
+    water_value = PolyhedralWaterValue(watervalue_filename)
     regulations = NordPoolRegulations()
     bidprices = collect(range(λ̱,stop=λ̄,length=3))
     prepend!(bidprices,regulations.lowerorderlimit)
@@ -37,7 +37,7 @@ end
 
 function DayAheadData(plantfilename::String, watervalue_filename, bidprices::AbstractVector)
     plantdata = HydroPlantCollection(plantfilename)
-    water_value = PolyhedralWaterValue(plantdata.plants, watervalue_filename)
+    water_value = PolyhedralWaterValue(watervalue_filename)
     regulations = NordPoolRegulations()
     prepend!(bidprices,regulations.lowerorderlimit)
     push!(bidprices,regulations.upperorderlimit)

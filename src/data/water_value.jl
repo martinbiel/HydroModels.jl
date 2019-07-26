@@ -20,10 +20,10 @@ function Base.getindex(cut::WaterValueCut, plant::Plant)
     haskey(cut.plant_indices, plant) || error("$plant not present in water value cut")
     return cut.coeffs[cut.plant_indices[plant]]
 end
-function lower_bound(cut::WaterValueCut)
+function cut_lb(cut::WaterValueCut)
     return cut.lb
 end
-function indices(cut::WaterValueCut)
+function cut_indices(cut::WaterValueCut)
     return cut.indices
 end
 function (cut::WaterValueCut)(M::AbstractVector)
@@ -62,6 +62,7 @@ end
 
 function PolyhedralWaterValue(filename::String)
     cuts, nindices = load_watervalue(filename)
+    cuts = convert(Vector{WaterValueCut{Float64}}, cuts)
     return PolyhedralWaterValue(cuts, nindices)
 end
 

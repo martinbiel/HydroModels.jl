@@ -63,7 +63,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             @variable(model, Q[p = plants, s = segments, t = hours], lowerbound = 0, upperbound = hydrodata[p].Q̄[s])
             @variable(model, S[p = plants, t = hours] >= 0)
             @variable(model, M[p = plants, t = hours], lowerbound = 0, upperbound = hydrodata[p].M̄)
-            @variable(model, W[i = nindices(water_value)])
+            @variable(model, W[i = 1:nindices(water_value)])
             @variable(model, H[t = hours] >= 0)
             @variable(model, Qf[p = plants, t = hours] >= 0)
             @variable(model, Sf[p = plants, t = hours] >= 0)
@@ -170,7 +170,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                         sum(water_value[c][p]*M[p,nhours(horizon)]
                             for p in plants)
                         + sum(W[i]
-                              for i in indices(water_value[c])) >= lower_bound(water_value[c]))
+                              for i in cut_indices(water_value[c])) >= cut_lb(water_value[c]))
         end
     end
     return stochasticmodel

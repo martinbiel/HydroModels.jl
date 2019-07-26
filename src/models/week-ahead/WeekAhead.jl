@@ -20,7 +20,7 @@ using Plots: font, text, Shape
 export
     WeekAheadData,
     WeekAheadScenario,
-    WeekAheadSampler,
+    RecurrentWeekAheadSampler,
     WeekAheadModel
 
 include("data.jl")

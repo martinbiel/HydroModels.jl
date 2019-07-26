@@ -22,7 +22,7 @@ export
     NordPoolDayAheadData,
     DayAheadScenario,
     DayAheadScenarios,
-    DayAheadSampler,
+    RecurrentDayAheadSampler,
     DayAheadModel,
     strategy,
     singleorder,

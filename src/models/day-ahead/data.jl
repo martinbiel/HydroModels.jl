@@ -4,7 +4,8 @@
     intradayfee::T = 0.11         # Fee for intraday trades (EUR/MWh)
     blocklimit::T = 500.0         # Maximum volume (MWh) in block orders
     blockminlength::Int = 3       # Minimum amount of consecutive hours in block orders
-    imbalancelimit::T = 200.0     # Maximum volume (MWh) that has to be settled in the intraday market
+    nblockorders::Int = 50        # Maximum number of block orders in portfolio
+    imbalancelimit::T = 200.0     # Maximum volume (MWh) that can be settled in the intraday market
     lowerorderlimit::T = -500.0   # Lower technical order price limit (EUR)
     upperorderlimit::T = 3000.0   # Upper technical order price limit (EUR)
 end

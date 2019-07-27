@@ -32,11 +32,11 @@ struct OrderStrategy{T <: AbstractFloat}
     single_orders::Vector{SingleOrder{T}}   # Order orders each hour
     block_orders::Vector{BlockOrder{T}}     # All block orders
 
-    function (::Type{OrderStrategy})(horizon::Horizon,
-                                     bidlevels::Vector{Vector{T}},
-                                     single_orders::Vector{SingleOrder{T}},
-                                     block_orders::Vector{BlockOrder{T}}) where T <: AbstractFloat
-        return new{T}(horizon, prices, single_orders, block_orders)
+    function OrderStrategy(horizon::Horizon,
+                           bidlevels::Vector{Vector{T}},
+                           single_orders::Vector{SingleOrder{T}},
+                           block_orders::Vector{BlockOrder{T}}) where T <: AbstractFloat
+        return new{T}(horizon, bidlevels, single_orders, block_orders)
     end
 end
 
@@ -73,7 +73,7 @@ function OrderStrategy(model::AbstractHydroModel)
 
     block_orders = Vector{BlockOrder{eltype(bidlevels[1])}}()
     for (i,price) in enumerate(model.indices.blockbids)
-        for (b,interval) in enumerate(hours_per_block)
+        for (b,interval) in enumerate(model.indices.hours_per_block)
             ordervolume = xb[i,b]
             if ordervolume > 1e-6
                 price = blockbidprice(bidlevels, interval, i)
@@ -401,11 +401,11 @@ end
     height = prices[end-1]+2*orderincrement
     # Independent Volume label
     push!(independent_bars,rect(25,-orderincrement,1.0,0.5*height))
-    push!(ordervolumes,(25.5,0.25*height-orderincrement,text("Independent Volume [MWh]",font(annotationfontsize,"sans-serif",-π/2,:white))))
+    push!(ordervolumes,(25.5,0.25*height-orderincrement,text("Independent Volume [MWh]",font(annotationfontsize,"sans-serif", :white, rotation = -90.))))
     # Dependent Volume label
     push!(accepted,length(dependent_bars)+1)
     push!(dependent_bars,rect(25,0.5*height-orderincrement,1.0,0.5*height))
-    push!(ordervolumes,(25.5,0.75*height-orderincrement,text("Dependent Volumes [Mwh]",font(annotationfontsize,"sans-serif",-π/2,:white))))
+    push!(ordervolumes,(25.5,0.75*height-orderincrement,text("Dependent Volumes [Mwh]",font(annotationfontsize,"sans-serif", :white, rotation = -90.))))
 
     # Plot attributes
     xticks := collect(0:24)
@@ -437,7 +437,7 @@ end
     # Always show the price independent orders
     @series begin
         seriestype := :shape
-        seriescolor := :green
+        seriescolor := KTH_colors[2]
         label := ""
         independent_bars
     end
@@ -474,7 +474,7 @@ end
         # Show all price dependent orders if no prices given
         @series begin
             seriestype := :shape
-            seriescolor := :brown
+            seriescolor := KTH_colors[1]
             label := ""
             dependent_bars
         end
@@ -795,8 +795,8 @@ end
     if !isempty(ρs) && length(ρs) != 24
         throw(ArgumentError("Need to supply a price vector for the whole day when showing block orders"))
     end
-    prices = strategy.prices
-    orderincrement = mean(abs.(diff(prices)))
+    bidlevels = strategy.bidlevels
+    orderincrement = mean(abs.(reduce(vcat, [diff(prices) for prices in bidlevels])))
 
     if !isempty(ρs)
         legend := :topleft

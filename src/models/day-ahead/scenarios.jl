@@ -79,3 +79,19 @@ function (sampler::RecurrentDayAheadSampler)()
     end
     return DayAheadScenario(PriceCurve(price_curve), flows[:, 2])
 end
+
+function generate_bidlevels(sampler::AbstractSampler{DayAheadScenario})
+    price_curves = [sampler().ρ for i = 1:1000]
+    bidlevels = zeros(5,24)
+    for i = 1:24
+        hourly_prices = [p[i] for p in price_curves]
+        μ = mean(hourly_prices)
+        σ = std(hourly_prices)
+        bidlevels[1,i] = μ - 2*σ
+        bidlevels[2,i] = μ - σ
+        bidlevels[3,i] = μ
+        bidlevels[4,i] = μ + σ
+        bidlevels[5,i] = μ + 2*σ
+    end
+    return bidlevels
+end

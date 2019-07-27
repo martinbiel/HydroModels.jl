@@ -130,11 +130,11 @@ totalrevenue(strategy::OrderStrategy,ρs) = production(strategy,ρs) ⋅ ρs
 
 ## Print / Plot routines ##
 # ===================================================== #
-function show(io::IO, ::MIME"text/plain", order::SingleOrder)
+function Base.show(io::IO, ::MIME"text/plain", order::SingleOrder)
     show(io,order)
 end
 
-function show(io::IO, order::SingleOrder)
+function Base.show(io::IO, order::SingleOrder)
     formatter = (d) -> begin
         if abs(d) <= sqrt(eps())
             "0.0"
@@ -157,17 +157,21 @@ function show(io::IO, order::SingleOrder)
     print(io,chomp(output))
 end
 
-KTH_colors = [RGB(25/255,84/255,166/255),
-              RGB(157/255,16/255,45/255),
-              RGB(98/255,146/255,46/255),
-              RGB(36/255,160/255,216/255),
-              RGB(228/255,54/255,62/255),
-              RGB(176/255,201/255,43/255),
-              RGB(216/255,84/255,151/255),
-              RGB(250/255,185/255,25/255),
-              RGB(101/255,101/255,108/255),
-              RGB(189/255,188/255,188/255),
-              RGB(227/255,229/255,227/255)]
+const KTH_colors = [RGB(25/255,84/255,166/255),
+                    RGB(157/255,16/255,45/255),
+                    RGB(98/255,146/255,46/255),
+                    RGB(36/255,160/255,216/255),
+                    RGB(228/255,54/255,62/255),
+                    RGB(176/255,201/255,43/255),
+                    RGB(216/255,84/255,151/255),
+                    RGB(250/255,185/255,25/255),
+                    RGB(101/255,101/255,108/255),
+                    RGB(189/255,188/255,188/255),
+                    RGB(227/255,229/255,227/255)]
+const KTHBlue = KTH_colors[1]
+const KTHRed = KTH_colors[2]
+const KTHGreen = KTH_colors[3]
+const KTHLBlue = KTH_colors[4]
 
 @recipe f(order::SingleOrder{T}) where T <: AbstractFloat = (order,[])
 @recipe f(order::SingleOrder{T},ρ::Real) where T <: AbstractFloat = (order,[ρ])
@@ -224,7 +228,7 @@ KTH_colors = [RGB(25/255,84/255,166/255),
     end
 
     # Plot attributes
-    xticks := linspace(0,maxorder,length(order.prices))
+    xticks := LinRange(0, maxorder, length(order.prices))
     yticks := 0:orderincrement:order.prices[end-1]
     ylims := (-orderincrement,order.prices[end-1]+orderincrement)
     formatter := (d) -> @sprintf("%.2f",d)
@@ -240,7 +244,6 @@ KTH_colors = [RGB(25/255,84/255,166/255),
     titlefontfamily := "sans-serif"
     legendfontsize := 16
     legendfontfamily := "sans-serif"
-    color_palette := KTH_colors
 
     # Dashed line
     if !isempty(line_v)
@@ -318,7 +321,7 @@ end
         if abs(d) <= sqrt(eps())
             text("0.0",font(annotationfontsize,"sans-serif",:white))
         elseif (log10(d) < -2.0 || log10(d) > 3.0)
-            text(@sprintf("%.2e",d),font(annotationfontsize,"sans-serif",-π/2,:white))
+            text(@sprintf("%.2e",d),font(annotationfontsize,"sans-serif",-90.,:white))
         elseif log10(d) > 2.0
             text(@sprintf("%.1f",d),font(annotationfontsize,"sans-serif",:white))
         else
@@ -424,7 +427,6 @@ end
     titlefontfamily := "sans-serif"
     legendfontsize := 16
     legendfontfamily := "sans-serif"
-    color_palette := KTH_colors
 
     legend := :topleft
     annotations := ordervolumes
@@ -437,7 +439,11 @@ end
     # Always show the price independent orders
     @series begin
         seriestype := :shape
-        seriescolor := KTH_colors[2]
+        if !isempty(ρs)
+            seriescolor := KTHGreen
+        else
+            seriescolor := KTHLBlue
+        end
         label := ""
         independent_bars
     end
@@ -446,27 +452,27 @@ end
         # Accepted orders
         @series begin
             seriestype := :shape
-            seriescolor := :green
+            seriescolor := KTHGreen
             label := "Accepted Orders"
             dependent_bars[accepted]
         end
         # Rejected orders
         @series begin
             seriestype := :shape
-            seriescolor := :red
+            seriescolor := KTHRed
             label := "Rejected Orders"
             dependent_bars[rejected]
         end
         # Show the price curve
         @series begin
             seriestype := :scatter
-            seriescolor := :green
+            seriescolor := KTHGreen
             label := "Market price"
             collect(0.5:1:23.5),ρs
         end
         @series begin
             seriestype := :path
-            seriescolor := :green
+            seriescolor := KTHGreen
             label := ""
             collect(0.5:1:23.5),ρs
         end
@@ -474,18 +480,18 @@ end
         # Show all price dependent orders if no prices given
         @series begin
             seriestype := :shape
-            seriescolor := KTH_colors[1]
+            seriescolor := KTHBlue
             label := ""
             dependent_bars
         end
     end
 end
 
-function show(io::IO, ::MIME"text/plain", order::BlockOrder)
+function Base.show(io::IO, ::MIME"text/plain", order::BlockOrder)
     show(io,order)
 end
 
-function show(io::IO, order::BlockOrder)
+function Base.show(io::IO, order::BlockOrder)
     formatter = (d) -> begin
         if abs(d) <= sqrt(eps())
             "0.0"
@@ -533,7 +539,7 @@ end
     price = order.price
     width = order.interval[2]-order.interval[1]
     height = order.price/10
-    color = :red
+    color = KTHRed
     status = "Rejected Order"
     padding = !isempty(ρs) ? 1.5 : 2*(order.interval[2]-order.interval[1])/24
 
@@ -541,7 +547,7 @@ end
         ρ̅ = mean(ρs[order.interval[1]+1:order.interval[2]])
         if order.price <= ρ̅
             price = ρ̅
-            color = :green
+            color = KTHGreen
             status = "Accepted Order"
         else
             δρ *= 4
@@ -572,7 +578,6 @@ end
     titlefontfamily := "sans-serif"
     legendfontsize := 16
     legendfontfamily := "sans-serif"
-    color_palette := KTH_colors
     title := "Block Order"
     xlabel := "Hour"
     ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""
@@ -591,20 +596,20 @@ end
         # Show the price curve
         @series begin
             seriestype := :scatter
-            seriescolor := :green
+            seriescolor := KTHGreen
             label := "Market price"
             collect(0.5:1:23.5),ρs
         end
         @series begin
             seriestype := :path
-            seriescolor := :green
+            seriescolor := KTHGreen
             label := ""
             collect(0.5:1:23.5),ρs
         end
     else
         @series begin
             seriestype := :shape
-            seriescolor := :brown
+            seriescolor := KTHBlue
             label := ""
             Shape(order.interval[1] + [0,width,width,0,0],order.price-height/2 + [0,0,height,height,0])
         end
@@ -716,14 +721,14 @@ end
     if !isempty(ρs)
         @series begin
             seriestype := :shape
-            seriescolor := :green
+            seriescolor := KTHGreen
             label := ""
             legendline
         end
     else
         @series begin
             seriestype := :shape
-            seriescolor := :brown
+            seriescolor := KTHBlue
             label := ""
             legendline
         end
@@ -736,7 +741,7 @@ end
         if !isempty(accepted_blocks)
             @series begin
                 seriestype := :shape
-                seriescolor := :green
+                seriescolor := KTHGreen
                 label := "Accepted Orders"
                 accepted_blocks
             end
@@ -745,9 +750,9 @@ end
         if !isempty(rejected_blocks)
             @series begin
                 linewidth := 4
-                linecolor := :red
+                linecolor := KTHRed
                 seriestype := :shape
-                seriescolor := :red
+                seriescolor := KTHRed
                 label := "Rejected Orders"
                 rejected_blocks,rejected_prices
             end
@@ -755,13 +760,13 @@ end
         # Show the price curve
         @series begin
             seriestype := :scatter
-            seriescolor := :green
+            seriescolor := KTHGreen
             label := "Market price"
             collect(0.5:1:23.5),ρs
         end
         @series begin
             seriestype := :path
-            seriescolor := :green
+            seriescolor := KTHGreen
             label := ""
             collect(0.5:1:23.5),ρs
         end
@@ -769,7 +774,7 @@ end
         # Show all orders
         @series begin
             seriestype := :shape
-            seriescolor := :brown
+            seriescolor := KTHBlue
             label := ""
             plain_orders
         end

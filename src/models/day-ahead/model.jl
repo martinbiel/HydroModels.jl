@@ -105,7 +105,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             end
             # Intraday
             @expression(model, intraday,
-                        sum(penalty(scenario,t)*z_up[t] - reward(scenario,t)*z_do[t]
+                        sum((penalty(scenario,t)*z_up[t] + regulations.intradayfee) - (reward(scenario,t) - regulations.intradayfee)*z_do[t]
                             for t = hours))
             # Value of stored water
             @expression(model, value_of_stored_water, -sum(W[i] for i in 1:nindices(water_value)))

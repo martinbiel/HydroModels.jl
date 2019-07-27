@@ -13,6 +13,7 @@ using Flux
 using HydroModels
 using HydroModels: AbstractHydroModel, StochasticHydroModel, River, Plant, Area, Scenario, Forecaster, forecast
 
+import Base: show
 import HydroModels: modelindices
 
 using Plots: font, text, Shape, RGB

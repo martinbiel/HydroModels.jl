@@ -14,8 +14,20 @@
     end
 end
 
-penalty(scenario::DayAheadScenario,t) = 2*scenario.ρ[t]
-reward(scenario::DayAheadScenario,t) = 0.2*scenario.ρ[t]
+function penalty(scenario::DayAheadScenario,t)
+    if 8 <= t <= 12 || 17 <= t <= 24
+        return 1.15*scenario.ρ[t]
+    else
+        return 1.1*scenario.ρ[t]
+    end
+end
+function reward(scenario::DayAheadScenario,t)
+    if 12 <= t <= 18 || 17 <= t <= 24
+        return 0.85*scenario.ρ[t]
+    else
+        return 0.9*scenario.ρ[t]
+    end
+end
 
 function local_inflows(scenario::DayAheadScenario, plants::Vector{Plant}, upstream_plants::Dict{Plant, Vector{Plant}})
     discharges = Dict{Plant, Float64}()

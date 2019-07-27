@@ -23,8 +23,8 @@ using Flux
 using BSON
 using BSON: @save, @load
 
-import Base.show
-import Statistics.mean
+import Base: show
+import Statistics: mean
 
 export
     AbstractModelIndices,

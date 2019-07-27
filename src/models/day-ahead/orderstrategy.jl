@@ -4,9 +4,9 @@ struct SingleOrder{T <: AbstractFloat}
     dependent_volumes::Vector{T}   # Price dependent order volume
     prices::Vector{T}              # Price dependent order prices
 
-    function (::Type{SingleOrder})(h::Integer,x_i::AbstractFloat,x_d::AbstractVector,prices::AbstractVector)
-        T = promote_type(typeof(x_i),eltype(x_d),eltype(prices),Float32)
-        return new{T}(h,x_i,convert(Vector{T},x_d),convert(Vector{T},prices))
+    function SingleOrder(h::Integer, x_i::AbstractFloat, x_d::AbstractVector, prices::AbstractVector)
+        T = promote_type(typeof(x_i), eltype(x_d), eltype(prices), Float32)
+        return new{T}(h, x_i, convert(Vector{T},x_d), convert(Vector{T}, prices))
     end
 end
 independent(order::SingleOrder) = order.independent_volume
@@ -19,65 +19,71 @@ struct BlockOrder{T <: AbstractFloat}
     volume::T                  # Asked volume for block order
     price::T                   # Asked price for block order
 
-    function (::Type{BlockOrder})(interval::Tuple{Int,Int},volume::AbstractFloat,price::AbstractFloat)
-        T = promote_type(typeof(volume),typeof(price),Float32)
-        return new{T}(interval,volume,price)
+    function BlockOrder(interval::Tuple{Int,Int}, volume::AbstractFloat, price::AbstractFloat)
+        T = promote_type(typeof(volume), typeof(price), Float32)
+        return new{T}(interval, volume, price)
     end
 end
 
 struct OrderStrategy{T <: AbstractFloat}
     horizon::Horizon                        # Planning horizon
-    prices::Vector{T}                       # Possible prices levels
+    bidlevels::Vector{Vector{T}}            # Possible prices levels
 
     single_orders::Vector{SingleOrder{T}}   # Order orders each hour
     block_orders::Vector{BlockOrder{T}}     # All block orders
 
-    function (::Type{OrderStrategy})(horizon::Horizon,prices::Vector{T},single_orders::Vector{SingleOrder{T}},block_orders::Vector{BlockOrder{T}}) where T <: AbstractFloat
-        return new{T}(horizon,prices,single_orders,block_orders)
+    function (::Type{OrderStrategy})(horizon::Horizon,
+                                     bidlevels::Vector{Vector{T}},
+                                     single_orders::Vector{SingleOrder{T}},
+                                     block_orders::Vector{BlockOrder{T}}) where T <: AbstractFloat
+        return new{T}(horizon, prices, single_orders, block_orders)
     end
 end
 
+function blockbidprice(bidlevels, hours_per_block, i)
+    return mean([bidlevels[i][2:end-1] for i in hours_per_block])[i]
+end
+
 function OrderStrategy(model::AbstractHydroModel)
-    optmodel = model.internalmodel
+    sp = model.internalmodel
     horizon = HydroModels.horizon(model)
     regulations = model.data.regulations
-    prices = model.data.bidprices
-    blockprices = prices[2:end-1]
+    bidlevels = model.data.bidlevels
 
-    (haskey(optmodel.objDict,:xt_i) && haskey(optmodel.objDict,:xt_d) && haskey(optmodel.objDict,:xb)) || error("Given JuMP model does not model order strategies")
+    #(haskey(sp..objDict,:xt_i) && haskey(optmodel.objDict,:xt_d) && haskey(optmodel.objDict,:xb)) || error("Given JuMP model does not model order strategies")
 
-    xt_i = getvalue(optmodel.objDict[:xt_i])
-    xt_d = getvalue(optmodel.objDict[:xt_d])
-    xb = getvalue(optmodel.objDict[:xb])
+    xt_i = optimal_decision(sp, :xt_i)
+    xt_d = optimal_decision(sp, :xt_d)
+    xb = optimal_decision(sp, :xb)
 
     # Check data length consistency
     hs = 1:nhours(horizon)
     hours_per_block = [collect(h:ending) for h in hs for ending in hs[h+regulations.blockminlength-1:end]]
     @assert nhours(horizon) == length(xt_i) "Incorrect horizon of price independent single orders"
     @assert nhours(horizon) == JuMP.size(xt_d)[2] "Incorrect horizon of price dependent single orders"
-    @assert length(hours_per_block) == JuMP.size(xb)[2] "Incorrect horizon of block orders"
-    @assert length(prices) == JuMP.size(xt_d)[1] "Incorrect number of possible orders in price dependent single orders"
-    @assert length(blockprices) == JuMP.size(xb)[1] "Incorrect number of possible orders in block orders"
+    # @assert length(hours_per_block) == JuMP.size(xb)[2] "Incorrect horizon of block orders"
+    # @assert all([length(bidlevels[t]) .== JuMP.size(xt_d)[t] for t in hs]) "Incorrect number of possible orders in price dependent single orders"
 
     # Accumulate orders per hour
-    single_orders = Vector{SingleOrder{eltype(prices)}}(undef, nhours(horizon))
+    single_orders = Vector{SingleOrder{eltype(bidlevels[1])}}(undef, nhours(horizon))
     for hour in 1:nhours(horizon)
-        single_d = [xt_d[order,hour] for order = 1:length(prices)]
-        single_orders[hour] = SingleOrder(hour,xt_i[hour],single_d,prices)
+        single_d = [xt_d[order,hour] for order = 1:length(model.indices.bids)]
+        single_orders[hour] = SingleOrder(hour, xt_i[hour], single_d, bidlevels[hour])
     end
 
-    block_orders = Vector{BlockOrder{eltype(prices)}}()
-    for (i,price) in enumerate(blockprices)
-        for (j,interval) in enumerate(hours_per_block)
-            ordervolume = xb[i,j]
+    block_orders = Vector{BlockOrder{eltype(bidlevels[1])}}()
+    for (i,price) in enumerate(model.indices.blockbids)
+        for (b,interval) in enumerate(hours_per_block)
+            ordervolume = xb[i,b]
             if ordervolume > 1e-6
-                push!(block_orders,BlockOrder(tuple(interval[1]-1,interval[end]),ordervolume,price))
+                price = blockbidprice(bidlevels, interval, i)
+                push!(block_orders, BlockOrder(tuple(interval[1]-1,interval[end]), ordervolume, price))
             end
         end
     end
 
     return OrderStrategy(horizon,
-                         prices,
+                         bidlevels,
                          single_orders,
                          block_orders)
 end
@@ -151,6 +157,18 @@ function show(io::IO, order::SingleOrder)
     print(io,chomp(output))
 end
 
+KTH_colors = [RGB(25/255,84/255,166/255),
+              RGB(157/255,16/255,45/255),
+              RGB(98/255,146/255,46/255),
+              RGB(36/255,160/255,216/255),
+              RGB(228/255,54/255,62/255),
+              RGB(176/255,201/255,43/255),
+              RGB(216/255,84/255,151/255),
+              RGB(250/255,185/255,25/255),
+              RGB(101/255,101/255,108/255),
+              RGB(189/255,188/255,188/255),
+              RGB(227/255,229/255,227/255)]
+
 @recipe f(order::SingleOrder{T}) where T <: AbstractFloat = (order,[])
 @recipe f(order::SingleOrder{T},ρ::Real) where T <: AbstractFloat = (order,[ρ])
 @recipe f(order::SingleOrder{T},ρs...) where T <: AbstractFloat = (order,[ρs...])
@@ -222,6 +240,7 @@ end
     titlefontfamily := "sans-serif"
     legendfontsize := 16
     legendfontfamily := "sans-serif"
+    color_palette := KTH_colors
 
     # Dashed line
     if !isempty(line_v)
@@ -405,6 +424,7 @@ end
     titlefontfamily := "sans-serif"
     legendfontsize := 16
     legendfontfamily := "sans-serif"
+    color_palette := KTH_colors
 
     legend := :topleft
     annotations := ordervolumes
@@ -552,6 +572,7 @@ end
     titlefontfamily := "sans-serif"
     legendfontsize := 16
     legendfontfamily := "sans-serif"
+    color_palette := KTH_colors
     title := "Block Order"
     xlabel := "Hour"
     ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""
@@ -685,6 +706,7 @@ end
     titlefontfamily := "sans-serif"
     legendfontsize := 16
     legendfontfamily := "sans-serif"
+    color_palette := KTH_colors
     title := "Block Orders"
     xlabel := "Hour"
     ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""

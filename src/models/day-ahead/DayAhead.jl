@@ -15,7 +15,7 @@ using HydroModels: AbstractHydroModel, StochasticHydroModel, River, Plant, Area,
 
 import HydroModels: modelindices
 
-using Plots: font, text, Shape
+using Plots: font, text, Shape, RGB
 
 export
     DayAheadData,

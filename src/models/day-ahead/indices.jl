@@ -17,7 +17,7 @@ function HydroModels.modelindices(data::DayAheadData, horizon::Horizon; areas::V
     end
     segments = collect(1:2)
     bids = collect(1:length(data.bidlevels[1]))
-    blockbids = collect(1:length(data.bidlevels)-2)
+    blockbids = collect(1:length(data.bidlevels[1])-2)
     hours_per_block = [collect(h:ending) for h in hours for ending in hours[h+data.regulations.blockminlength-1:end]]
     blocks = collect(1:length(hours_per_block))
     return DayAheadIndices(hours, plants, segments, bids, blockbids, blocks, hours_per_block)

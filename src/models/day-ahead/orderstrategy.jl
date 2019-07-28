@@ -309,12 +309,14 @@ end
 @recipe f(orders::Vector{SingleOrder{T}}) where T <: AbstractFloat = (orders,[])
 @recipe f(orders::Vector{SingleOrder{T}},ρ::Real) where T <: AbstractFloat = (orders,[ρ])
 @recipe f(orders::Vector{SingleOrder{T}},ρs...) where T <: AbstractFloat = (orders,[ρs...])
-@recipe function f(orders::Vector{SingleOrder{T}},ρs::AbstractVector; annotationfontsize = 12) where T <: AbstractFloat
+@recipe function f(orders::Vector{SingleOrder{T}}, ρs::AbstractVector; annotationfontsize = 12) where T <: AbstractFloat
     prices = orders[1].prices
     orderincrement = mean(abs.(diff(prices[2:end-1])))
     ρ_min = !isempty(ρs) ? minimum(ρs) : []
     ρ_max = !isempty(ρs) ? maximum(ρs) : []
     δρ = !isempty(ρs) ? mean(abs.(diff(ρs))) : []
+    δρ = !isempty(ρs) ? std(ρs) : []
+    highest = !isempty(ρs) ? max(ρ_max, prices[end-1]) : prices[end-1]
 
     rect(x,y,w,h) = Shape(x .+ [0,w,w,0,0],y .+ [0,0,h,h,0])
     formatter = (d) -> begin
@@ -401,7 +403,7 @@ end
         end
     end
 
-    height = prices[end-1]+2*orderincrement
+    height = highest+2*orderincrement
     # Independent Volume label
     push!(independent_bars,rect(25,-orderincrement,1.0,0.5*height))
     push!(ordervolumes,(25.5,0.25*height-orderincrement,text("Independent Volume [MWh]",font(annotationfontsize,"sans-serif", :white, rotation = -90.))))
@@ -413,11 +415,11 @@ end
     # Plot attributes
     xticks := collect(0:24)
     xlims := (-1,26)
-    ylims --> (-orderincrement,prices[end-1]+orderincrement)
+    ylims --> (-orderincrement,highest+orderincrement)
     if !isempty(ρs)
-        yticks := 0:mean([δρ,orderincrement]):prices[end-1]+orderincrement
+        yticks := 0:mean([δρ,orderincrement]):highest+orderincrement
     else
-        yticks := 0:orderincrement:prices[end]
+        yticks := 0:orderincrement:highest
     end
     tickfontsize := 14
     tickfontfamily := "sans-serif"
@@ -521,7 +523,7 @@ end
     ρ_min = !isempty(ρs) ? minimum(ρs) : []
     ρ_max = !isempty(ρs) ? maximum(ρs) : []
     δρ = !isempty(ρs) ? mean(abs.(diff(ρs))) : []
-    p_max = order.price + δρ
+    p_max = order.price .+ δρ
     highest = !isempty(ρs) ? max(p_max,ρ_max) : p_max
     annotation_font = font(annotationfontsize,"sans-serif",:white)
     formatter = (d) -> begin
@@ -566,7 +568,7 @@ end
             yticks := []
         end
     else
-        xlims := (order.interval[1]-1,order.interval[2]+1)
+        xlims := (order.interval[1]-1, order.interval[2]+1)
         yticks := []
     end
     title := "Block Order"
@@ -582,8 +584,8 @@ end
     xlabel := "Hour"
     ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""
     yformatter --> (d) -> @sprintf("%.2f",d)
-    annotations --> [(order.interval[1]+padding,price,text(@sprintf("%.2f [EUR/MWh]",order.price),annotation_font)),
-                     (order.interval[2]-padding,price,text(@sprintf("%.2f [MWh/h]",order.volume),annotation_font))]
+    annotations --> [(order.interval[1] .+ padding, price,text(@sprintf("%.2f [EUR/MWh]",order.price), annotation_font)),
+                     (order.interval[2] .- padding, price,text(@sprintf("%.2f [MWh/h]",order.volume), annotation_font))]
 
     if !isempty(ρs)
         # Accepted/Rejected orders
@@ -591,27 +593,27 @@ end
             seriestype := :shape
             seriescolor := color
             label := status
-            Shape(order.interval[1] + [0,width,width,0,0],price-height/2 + [0,0,height,height,0])
+            Shape(order.interval[1] .+ [0.,width,width,0,0], price .- height/2 .+ [0.,0,height,height,0])
         end
         # Show the price curve
         @series begin
             seriestype := :scatter
             seriescolor := KTHGreen
             label := "Market price"
-            collect(0.5:1:23.5),ρs
+            collect(0.5:1:23.5), ρs
         end
         @series begin
             seriestype := :path
             seriescolor := KTHGreen
             label := ""
-            collect(0.5:1:23.5),ρs
+            collect(0.5:1:23.5), ρs
         end
     else
         @series begin
             seriestype := :shape
             seriescolor := KTHBlue
             label := ""
-            Shape(order.interval[1] + [0,width,width,0,0],order.price-height/2 + [0,0,height,height,0])
+            Shape(order.interval[1] .+ [0,width,width,0,0], order.price .- height/2 .+ [0.,0,height,height,0])
         end
     end
 end
@@ -623,8 +625,10 @@ end
     end
     ρ_min = !isempty(ρs) ? minimum(ρs) : []
     ρ_max = !isempty(ρs) ? maximum(ρs) : []
-    δρ = !isempty(ρs) ? mean(abs.(diff(ρs))) : []
+    δρ = !isempty(ρs) ? std(ρs) : []
     p_max = maximum([order.price for order in orders]) .+ δρ
+    orderincrement = mean(abs.(diff([order.price for order in orders])))
+    increment = !isempty(ρs) ? mean([δρ,orderincrement]) : orderincrement
     highest = !isempty(ρs) ? max(p_max,ρ_max) : p_max
     levels = collect(1:1:length(orders))
     sorted = sort(orders,by=(order)->order.price)
@@ -648,16 +652,16 @@ end
 
     rect(x,y,w,h) = Shape(x .+ [0,w,w,0,0],y .+ [0,0,h,h,0])
     if !isempty(ρs)
-        accepted = find(o -> o.price <= mean(ρs[o.interval[1]+1:o.interval[2]]),orders)
+        accepted = findall(o -> o.price <= mean(ρs[o.interval[1]+1:o.interval[2]]),orders)
         if isempty(accepted)
             δρ *= 4
         end
-        accepted_orders = [BlockOrder(order.interval,sum([same.volume for same in orders[accepted][find(o -> o.interval == order.interval,orders[accepted])]]),order.price) for order in unique(o -> o.interval,orders[accepted])]
+        accepted_orders = [BlockOrder(order.interval,sum([same.volume for same in orders[accepted][findall(o -> o.interval == order.interval,orders[accepted])]]),order.price) for order in unique(o -> o.interval,orders[accepted])]
         rejected_orders = orders[setdiff(1:length(orders),accepted)]
         for order in accepted_orders
             width = order.interval[2]-order.interval[1]
             ρ̅ = mean(ρs[order.interval[1]+1:order.interval[2]])
-            push!(accepted_blocks,rect(order.interval[1],ρ̅-δρ/4,width,δρ/2))
+            push!(accepted_blocks,rect(order.interval[1],ρ̅-increment/4,width, increment/2))
             push!(orderinfos,(order.interval[1]+0.5,ρ̅,formatter(ρ̅)))
             push!(orderinfos,(order.interval[2]-0.5,ρ̅,formatter(order.volume)))
         end
@@ -683,7 +687,7 @@ end
         append!(orderinfos,[(20.5,length(orders)+2.5,text("Price [EUR/MWh]",annotation_font)),(24.5,length(orders)+2.5,text("Volume [MWh/h]",annotation_font))])
     end
     legendline = if !isempty(ρs)
-        rect(19,highest+δρ/2,7,δρ/2)
+        rect(19,highest+δρ/2,7,increment/2)
     else
         rect(19,length(orders)+2,7,1.0)
     end
@@ -692,9 +696,9 @@ end
     xlims := (-1,26)
     xticks := 0:1:24
     if !isempty(ρs)
-        ylims := (ρ_min-δρ,highest+δρ)
+        ylims := (ρ_min-increment,highest+increment)
         if δρ >= eps()
-            yticks := ρ_min:δρ:highest+δρ
+            yticks := ρ_min:increment:highest+δρ
         else
             yticks := []
         end
@@ -791,7 +795,7 @@ function show(io::IO, strategy::OrderStrategy)
     else
         println(io,"Order Strategy")
         println(io,"Price levels:")
-        Base.print_matrix(io,strategy.prices)
+        Base.print_matrix(io,strategy.bidlevels)
     end
 end
 

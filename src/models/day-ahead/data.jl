@@ -24,14 +24,14 @@ struct DayAheadData{T <: AbstractFloat} <: AbstractModelData
                           regulations::TradeRegulations{T},
                           bidlevels::Vector{Vector{T}};
                           intraday_trading::Bool = true,
-                          use_blockbids::Bool = false) where T <: AbstractFloat
+                          use_blockbids::Bool = true) where T <: AbstractFloat
         length(bidlevels) == 24 || error("Supply exactly 24 bidlevel sets")
         all(length.(bidlevels) .== length(bidlevels[1])) || error("All bidlevel sets must be of the same length.")
         return new{T}(plantdata, water_value, regulations, intraday_trading, use_blockbids, bidlevels)
     end
 end
 
-function DayAheadData(plantfilename::String, watervalue_filename, bidlevelsets::AbstractMatrix; intraday_trading = true, use_blockbids = false)
+function DayAheadData(plantfilename::String, watervalue_filename, bidlevelsets::AbstractMatrix; intraday_trading = true, use_blockbids = true)
     size(bidlevelsets, 2) == 24 || error(" ")
     plantdata = HydroPlantCollection(plantfilename)
     water_value = PolyhedralWaterValue(watervalue_filename)
@@ -44,7 +44,7 @@ function DayAheadData(plantfilename::String, watervalue_filename, bidlevelsets::
     DayAheadData(plantdata, water_value, regulations, bidlevels, intraday_trading = intraday_trading, use_blockbids = use_blockbids)
 end
 
-function DayAheadData(plantfilename::String, watervalue_filename, bidlevels::AbstractVector; intraday_trading = true, use_blockbids = false)
+function DayAheadData(plantfilename::String, watervalue_filename, bidlevels::AbstractVector; intraday_trading = true, use_blockbids = true)
     plantdata = HydroPlantCollection(plantfilename)
     water_value = PolyhedralWaterValue(watervalue_filename)
     regulations = NordPoolRegulations()

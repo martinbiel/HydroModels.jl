@@ -1,8 +1,10 @@
+include("rivers.jl")
 include("horizon.jl")
 include("segmenter.jl")
 include("hydrodata.jl")
 include("water_value.jl")
 include("pricedata.jl")
+include("flowdata.jl")
 include("forecaster.jl")
 
 Scenario = Int

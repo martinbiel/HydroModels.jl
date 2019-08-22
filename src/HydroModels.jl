@@ -5,6 +5,7 @@ module HydroModels
 using LinearAlgebra
 using DelimitedFiles
 using Dates
+using Statistics
 using Printf
 
 # Packages
@@ -30,6 +31,10 @@ export
     AbstractModelIndices,
     AbstractModelData,
     Horizon,
+    PlantCollection,
+    plants,
+    nplants,
+    Skellefteälven,
     HydroPlantCollection,
     hydrodata,
     plants_in_river,
@@ -43,6 +48,10 @@ export
     cut_lb,
     PriceCurve,
     PriceData,
+    Inflows,
+    InflowSequence,
+    local_inflows,
+    local_inflow_sequence,
     Forecaster,
     PriceForecaster,
     FlowForecaster,

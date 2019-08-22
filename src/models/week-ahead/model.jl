@@ -32,9 +32,8 @@ function WeekAheadModelDef(horizon::Horizon, data::WeekAheadData, indices::WeekA
             end
             @unpack hours, plants, segments = indices
             @unpack hydrodata = data
-            @uncertain ρ from ξ::WeekAheadScenario
-            Q̃ = mean_flows(ξ, plants)
-            V = local_inflows(ξ, plants, hydrodata.Qu)
+            @uncertain ρ Q̃ from WeekAheadScenario
+            V = local_inflow_sequence(Q̃, hydrodata.Qu)
             # Variables
             # =======================================================
             # First stage
@@ -51,33 +50,31 @@ function WeekAheadModelDef(horizon::Horizon, data::WeekAheadData, indices::WeekA
             # ========================================================
             # Net profit
             @expression(model, net_profit,
-                        sum(ρ[t]*H[t]
-                            for t = hours))
+                sum(ρ[t]*H[t]
+                    for t = hours))
             # Value of stored water
             @objective(model, Max, net_profit)
             # Constraints
             # ========================================================
             # Hydrological balance
             @constraint(model, hydro_constraints[p = plants, t = hours],
-                        # Previous reservoir content
-                        M[p,t] == (t > 1 ? M[p,t-1] : M₀[p])
-                        # Inflow
-                        + sum(Qf[i,t]
-                              for i = intersect(hydrodata.Qu[p],plants))
-                        + sum(Sf[i,t]
-                              for i = intersect(hydrodata.Su[p],plants))
-                        # Local inflow
-                        + V[div(t-1,24)+1][p]
-                        # Outflow
-                        - sum(Q[p,s,t]
-                              for s = segments)
-                        - S[p,t]
+                # Previous reservoir content
+                M[p,t] == (t > 1 ? M[p,t-1] : M₀[p])
+                # Inflow
+                + sum(Qf[i,t] for i = intersect(hydrodata.Qu[p],plants))
+                + sum(Sf[i,t] for i = intersect(hydrodata.Su[p],plants))
+                # Local inflow
+                + V[div(t-1,24)+1][p]
+                # Outflow
+                - sum(Q[p,s,t]
+                      for s = segments)
+                - S[p,t]
                         )
             # Production
             @constraint(model, production[t = hours],
-                        H[t] == sum(hydrodata[p].μ[s]*Q[p,s,t]
-                                    for p = plants, s = segments)
-                        )
+                H[t] == sum(hydrodata[p].μ[s]*Q[p,s,t]
+                    for p = plants, s = segments)
+            )
             # Water flow: Discharge + Spillage
             @constraintref Qflow[1:length(plants),1:nhours(horizon)]
             @constraintref Sflow[1:length(plants),1:nhours(horizon)]
@@ -85,34 +82,34 @@ function WeekAheadModelDef(horizon::Horizon, data::WeekAheadData, indices::WeekA
                 for t = hours
                     if t - hydrodata[p].Rqh > 1
                         Qflow[pidx,t] = @constraint(model,
-                                                    Qf[p,t] == (hydrodata[p].Rqm/60)*sum(Q[p,s,t-(hydrodata[p].Rqh+1)]
-                                                                                         for s = segments)
-                                                    + (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                                                                  for s = segments)
-                                                    )
+                            Qf[p,t] == (hydrodata[p].Rqm/60)*sum(Q[p,s,t-(hydrodata[p].Rqh+1)]
+                                for s = segments)
+                            + (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
+                                for s = segments)
+                        )
                     elseif t - hydrodata[p].Rqh > 0
                         Qflow[pidx,t] = @constraint(model,
-                                                    Qf[p,t] == (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                                                                           for s = segments)
-                                                    )
+                            Qf[p,t] == (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
+                                for s = segments)
+                        )
                     else
                         Qflow[pidx,t] = @constraint(model,
-                                                    Qf[p,t] == 0
-                                                    )
+                            Qf[p,t] == 0
+                        )
                     end
                     if t - hydrodata[p].Rsh > 1
                         Sflow[pidx,t] = @constraint(model,
-                                                    Sf[p,t] == (hydrodata[p].Rsm/60)*S[p,t-(hydrodata[p].Rsh+1)]
-                                                    + (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
-                                                    )
+                            Sf[p,t] == (hydrodata[p].Rsm/60)*S[p,t-(hydrodata[p].Rsh+1)]
+                            + (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
+                        )
                     elseif t - hydrodata[p].Rsh > 0
                         Sflow[pidx,t] = @constraint(model,
-                                                    Sf[p,t] == (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
-                                                    )
+                            Sf[p,t] == (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
+                        )
                     else
                         Sflow[pidx,t] = @constraint(model,
-                                                    Sf[p,t] == 0
-                                                    )
+                            Sf[p,t] == 0
+                        )
                     end
                 end
             end

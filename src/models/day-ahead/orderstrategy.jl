@@ -44,13 +44,11 @@ function blockbidprice(bidlevels, hours_per_block, i)
     return mean([bidlevels[i][2:end-1] for i in hours_per_block])[i]
 end
 
-function OrderStrategy(model::AbstractHydroModel)
+function OrderStrategy(model::AbstractHydroModel; variant = :rp)
     sp = model.internalmodel
     horizon = HydroModels.horizon(model)
     regulations = model.data.regulations
     bidlevels = model.data.bidlevels
-
-    #(haskey(sp..objDict,:xt_i) && haskey(optmodel.objDict,:xt_d) && haskey(optmodel.objDict,:xb)) || error("Given JuMP model does not model order strategies")
 
     xt_i = optimal_decision(sp, :xt_i)
     xt_d = optimal_decision(sp, :xt_d)
@@ -88,11 +86,11 @@ function OrderStrategy(model::AbstractHydroModel)
                          block_orders)
 end
 
-function singleorder(strategy::OrderStrategy,hour::Int64)
-    if hour > 0 && hour <= hours(strategy.horizon)
+function singleorder(strategy::OrderStrategy, hour::Int64)
+    if hour > 0 && hour <= nhours(strategy.horizon)
         return strategy.single_orders[hour]
     else
-        throw(ArgumentError(string("Selected hour ",hour," not within horizon 1 to ",hours(strategy.horizon))))
+        throw(ArgumentError(string("Selected hour ", hour, " not within horizon 1 to ", nhours(strategy.horizon))))
     end
 end
 singleorders(strategy::OrderStrategy) = strategy.single_orders
@@ -104,9 +102,9 @@ function volumes(strategy::OrderStrategy)
 end
 
 function production(strategy::OrderStrategy{T},ρs::AbstractVector) where T <: AbstractFloat
-    H = zeros(T,hours(strategy.horizon))
-    accepted_blocks = blockorders(strategy)[find((o) -> o.price <= mean(ρs[o.interval[1]+1:o.interval[2]]),blockorders(strategy))]
-    for h = 1:hours(strategy.horizon)
+    H = zeros(T,nhours(strategy.horizon))
+    accepted_blocks = blockorders(strategy)[findall((o) -> o.price <= mean(ρs[o.interval[1]+1:o.interval[2]]),blockorders(strategy))]
+    for h = 1:nhours(strategy.horizon)
         ρ = ρs[h]
         single = singleorder(strategy,h)
         H[h] = independent(single)
@@ -118,14 +116,14 @@ function production(strategy::OrderStrategy{T},ρs::AbstractVector) where T <: A
                 break
             end
         end
-        blocks_in_hour = find(o -> (o.interval[1]+1 <= h <= o.interval[2]),accepted_blocks)
+        blocks_in_hour = findall(o -> (o.interval[1]+1 <= h <= o.interval[2]),accepted_blocks)
         H[h] += sum([order.volume for order in accepted_blocks[blocks_in_hour]])
     end
     return H
 end
 totalproduction(strategy::OrderStrategy,ρ::AbstractVector) = sum(production(strategy,ρ))
 
-revenue(strategy::OrderStrategy,ρs::AbstractVector) = production(strategy,ρs) .* ρs
+revenue(strategy::OrderStrategy,ρs::AbstractVector) = production(strategy, ρs) .* ρs
 totalrevenue(strategy::OrderStrategy,ρs) = production(strategy,ρs) ⋅ ρs
 
 ## Print / Plot routines ##
@@ -310,20 +308,20 @@ end
 @recipe f(orders::Vector{SingleOrder{T}},ρ::Real) where T <: AbstractFloat = (orders,[ρ])
 @recipe f(orders::Vector{SingleOrder{T}},ρs...) where T <: AbstractFloat = (orders,[ρs...])
 @recipe function f(orders::Vector{SingleOrder{T}}, ρs::AbstractVector; annotationfontsize = 12) where T <: AbstractFloat
-    prices = orders[1].prices
+    prices = orders[findmax([o.prices[end-1] for o in orders])[2]].prices
     orderincrement = mean(abs.(diff(prices[2:end-1])))
     ρ_min = !isempty(ρs) ? minimum(ρs) : []
     ρ_max = !isempty(ρs) ? maximum(ρs) : []
     δρ = !isempty(ρs) ? mean(abs.(diff(ρs))) : []
     δρ = !isempty(ρs) ? std(ρs) : []
-    highest = !isempty(ρs) ? max(ρ_max, prices[end-1]) : prices[end-1]
+    highest = !isempty(ρs) ? max(ρ_max, prices[end-1]) : prices[end-1]+2*orderincrement
 
     rect(x,y,w,h) = Shape(x .+ [0,w,w,0,0],y .+ [0,0,h,h,0])
     formatter = (d) -> begin
         if abs(d) <= sqrt(eps())
             text("0.0",font(annotationfontsize,"sans-serif",:white))
         elseif (log10(d) < -2.0 || log10(d) > 3.0)
-            text(@sprintf("%.2e",d),font(annotationfontsize,"sans-serif",-90.,:white))
+            text(@sprintf("%.1e",d),font(annotationfontsize,"sans-serif",:white))
         elseif log10(d) > 2.0
             text(@sprintf("%.1f",d),font(annotationfontsize,"sans-serif",:white))
         else
@@ -815,7 +813,7 @@ end
 
     @series begin
         title := "Single Orders"
-        annotationfontsize := 9
+        annotationfontsize := 8
         subplot := 1
         strategy.single_orders,ρs
     end

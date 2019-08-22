@@ -18,6 +18,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             end
             @unpack hours, plants, bids, blockbids, blocks, hours_per_block = indices
             @unpack hydrodata, regulations, use_blockbids = data
+            active_blocks(t) = findall(A->in(t,A),hours_per_block)
             # Variables
             # ========================================================
             @variable(model, xt_i[t = hours] >= 0)
@@ -31,17 +32,19 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             # ========================================================
             # Increasing bid curve
             @constraint(model, bidcurve[i = bids[1:end-1], t = hours],
-                        xt_d[i,t] <= xt_d[i+1,t]
-                        )
+                xt_d[i,t] <= xt_d[i+1,t]
+            )
             # Maximal bids
             if use_blockbids
                 @constraint(model, maxhourlybids[t = hours],
-                            xt_i[t] + xt_d[bids[end],t] + sum(xb[i,b] for i = blockbids for b = findall(A->in(t,A),hours_per_block))<= 1.1*sum(hydrodata[p].H̄ for p in plants)
-                            )
+                    xt_i[t] + xt_d[bids[end],t] + sum(xb[i,b]
+                        for i in blockbids for b in active_blocks(t))
+                            <= 2*sum(hydrodata[p].H̄ for p in plants)
+                )
             else
                 @constraint(model, maxhourlybids[t = hours],
-                            xt_i[t] + xt_d[bids[end],t] <= 1.1*sum(hydrodata[p].H̄ for p in plants)
-                            )
+                    xt_i[t] + xt_d[bids[end],t] <= 2*sum(hydrodata[p].H̄ for p in plants)
+                )
             end
         end
         # Second stage
@@ -54,9 +57,9 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             end
             @unpack hours, plants, segments, blocks, hours_per_block = indices
             @unpack hydrodata, water_value, regulations, intraday_trading, use_blockbids, bidlevels = data
-            @uncertain ρ from ξ::DayAheadScenario
-            Q̃ = mean_flows(ξ, plants)
-            V = local_inflows(ξ, plants, hydrodata.Qu)
+            @uncertain ρ Q̃ from ξ::DayAheadScenario
+            V = local_inflows(Q̃, hydrodata.Qu)
+            # Auxilliary functions
             ih(t) = begin
                 idx = findlast(bidlevels[t] .<= ρ[t])
                 return idx == nothing ? -1 : idx
@@ -68,6 +71,12 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 idx = findlast(blockbidlevel(b) .<= mean(ρ[hours_per_block[b]]))
                 return idx == nothing ? -1 : idx
             end
+            interpolate(ρ, bidlevels, xt_d, t) = begin
+                lower = ((ρ[t] - bidlevels[t][ih(t)])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xt_d[ih(t)+1,t]
+                upper = ((bidlevels[t][ih(t)+1]-ρ[t])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xt_d[ih(t),t]
+                return lower + upper
+            end
+            active_blocks(t) = findall(A->in(t,A),hours_per_block)
             # Variables
             # =======================================================
             # First stage
@@ -94,19 +103,19 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             # Net profit
             if use_blockbids
                 @expression(model, net_profit,
-                            sum((ρ[t]-regulations.dayaheadfee)*yt[t]
-                                for t = hours)
-                            + sum(length(hours_per_block[b])*(mean(ρ[hours_per_block[b]])-regulations.dayaheadfee)*yb[b]
-                                  for b = blocks))
+                    sum((ρ[t]-regulations.dayaheadfee)*yt[t]
+                        for t = hours)
+                    + sum(length(hours_per_block[b])*(mean(ρ[hours_per_block[b]])-regulations.dayaheadfee)*yb[b]
+                        for b = blocks))
             else
                 @expression(model, net_profit,
-                            sum((ρ[t]-regulations.dayaheadfee)*yt[t]
-                                for t = hours))
+                    sum((ρ[t]-regulations.dayaheadfee)*yt[t]
+                        for t in hours))
             end
             # Intraday
             @expression(model, intraday,
-                        sum((penalty(scenario,t)*z_up[t] + regulations.intradayfee) - (reward(scenario,t) - regulations.intradayfee)*z_do[t]
-                            for t = hours))
+                sum((penalty(ξ,t)*z_up[t] + regulations.intradayfee) - (reward(ξ,t) - regulations.intradayfee)*z_do[t]
+                    for t in hours))
             # Value of stored water
             @expression(model, value_of_stored_water, -sum(W[i] for i in 1:nindices(water_value)))
             # Define objective
@@ -120,56 +129,52 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             # ========================================================
             # Bid-dispatch links
             @constraint(model, hourlybids[t = hours],
-                        yt[t] == ((ρ[t] - bidlevels[t][ih(t)])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xt_d[ih(t)+1,t]
-                        + ((bidlevels[t][ih(t)+1]-ρ[t])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xt_d[ih(t),t]
-                        + xt_i[t]
-                        )
+                yt[t] == interpolate(ρ, bidlevels, xt_d, t) + xt_i[t]
+            )
             if use_blockbids
                 @constraint(model, bidblocks[b = blocks],
-                            yb[b] == sum(xb[j,b]
-                                         for j = 1:ib(b)))
+                    yb[b] == sum(xb[j,b]
+                        for j in 1:ib(b)))
             end
 
             # Hydrological balance
             @constraint(model, hydro_constraints[p = plants, t = hours],
-                        # Previous reservoir content
-                        M[p,t] == (t > 1 ? M[p,t-1] : hydrodata[p].M₀)
-                        # Inflow
-                        + sum(Qf[i,t]
-                              for i = intersect(hydrodata.Qu[p],plants))
-                        + sum(Sf[i,t]
-                              for i = intersect(hydrodata.Su[p],plants))
-                        # Local inflow
-                        + V[p]
-                        # Outflow
-                        - sum(Q[p,s,t]
-                              for s = segments)
-                        - S[p,t]
-                        )
+                # Previous reservoir content
+                M[p,t] == (t > 1 ? M[p,t-1] : hydrodata[p].M₀)
+                # Inflow
+                + sum(Qf[i,t] for i in intersect(hydrodata.Qu[p],plants))
+                + sum(Sf[i,t] for i in intersect(hydrodata.Su[p],plants))
+                # Local inflow
+                + V[p]
+                # Outflow
+                - sum(Q[p,s,t] for s in segments)
+                - S[p,t]
+            )
             # Production
             @constraint(model, production[t = hours],
-                        H[t] == sum(hydrodata[p].μ[s]*Q[p,s,t]
-                                    for p = plants, s = segments)
-                        )
+                H[t] == sum(hydrodata[p].μ[s]*Q[p,s,t]
+                    for p in plants, s in segments)
+            )
             # Load balance
             if intraday_trading
                 if use_blockbids
                     @constraint(model, loadbalance[t = hours],
-                                yt[t] + sum(yb[b] for b = findall(A->in(t,A),hours_per_block)) - H[t] == z_up[t] - z_do[t]
-                                )
+                        yt[t] + sum(yb[b] for b in active_blocks(t)) - H[t] == z_up[t] - z_do[t]
+                    )
                 else
                     @constraint(model, loadbalance[t = hours],
-                                yt[t] - H[t] == z_up[t] - z_do[t]
-                                )
+                        yt[t] - H[t] == z_up[t] - z_do[t]
+                    )
                 end
             else
                 if use_blockbids
                     @constraint(model, loadbalance[t = hours],
-                                yt[t] + sum(yb[b] for b = findall(A->in(t,A),hours_per_block)) == H[t])
+                        yt[t] + sum(yb[b] for b in active_blocks(t)) == H[t]
+                    )
                 else
                     @constraint(model, loadbalance[t = hours],
-                                yt[t] == H[t]
-                                )
+                        yt[t] == H[t]
+                    )
                 end
             end
             # Water flow: Discharge + Spillage
@@ -179,43 +184,43 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 for t = hours
                     if t - hydrodata[p].Rqh > 1
                         Qflow[pidx,t] = @constraint(model,
-                                                    Qf[p,t] == (hydrodata[p].Rqm/60)*sum(Q[p,s,t-(hydrodata[p].Rqh+1)]
-                                                                                         for s = segments)
-                                                    + (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                                                                  for s = segments)
-                                                    )
+                            Qf[p,t] == (hydrodata[p].Rqm/60)*sum(Q[p,s,t-(hydrodata[p].Rqh+1)]
+                                 for s in segments)
+                            + (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
+                                 for s in segments)
+                        )
                     elseif t - hydrodata[p].Rqh > 0
                         Qflow[pidx,t] = @constraint(model,
-                                                    Qf[p,t] == (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                                                                           for s = segments)
-                                                    )
+                            Qf[p,t] == (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
+                                 for s in segments)
+                            )
                     else
                         Qflow[pidx,t] = @constraint(model,
-                                                    Qf[p,t] == 0
-                                                    )
+                            Qf[p,t] == 0
+                        )
                     end
                     if t - hydrodata[p].Rsh > 1
                         Sflow[pidx,t] = @constraint(model,
-                                                    Sf[p,t] == (hydrodata[p].Rsm/60)*S[p,t-(hydrodata[p].Rsh+1)]
-                                                    + (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
-                                                    )
+                            Sf[p,t] == (hydrodata[p].Rsm/60)*S[p,t-(hydrodata[p].Rsh+1)]
+                            + (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
+                        )
                     elseif t - hydrodata[p].Rsh > 0
                         Sflow[pidx,t] = @constraint(model,
-                                                    Sf[p,t] == (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
-                                                    )
+                            Sf[p,t] == (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
+                        )
                     else
                         Sflow[pidx,t] = @constraint(model,
-                                                    Sf[p,t] == 0
-                                                    )
+                            Sf[p,t] == 0
+                        )
                     end
                 end
             end
             # Water value
             @constraint(model, water_value_approximation[c = 1:ncuts(water_value)],
-                        sum(water_value[c][p]*M[p,nhours(horizon)]
-                            for p in plants)
-                        + sum(W[i]
-                              for i in cut_indices(water_value[c])) >= cut_lb(water_value[c]))
+                sum(water_value[c][p]*M[p,nhours(horizon)]
+                    for p in plants)
+                + sum(W[i]
+                    for i in cut_indices(water_value[c])) >= cut_lb(water_value[c]))
         end
     end
     return stochasticmodel

@@ -50,29 +50,29 @@ function OrderStrategy(model::AbstractHydroModel; variant = :rp)
     regulations = model.data.regulations
     bidlevels = model.data.bidlevels
 
-    xt_i = optimal_decision(sp, :xt_i)
-    xt_d = optimal_decision(sp, :xt_d)
-    xb = optimal_decision(sp, :xb)
+    xᴵ = optimal_decision(sp, :xᴵ)
+    xᴰ = optimal_decision(sp, :xᴰ)
+    xᴮ = optimal_decision(sp, :xᴮ)
 
     # Check data length consistency
     hs = 1:nhours(horizon)
     hours_per_block = [collect(h:ending) for h in hs for ending in hs[h+regulations.blockminlength-1:end]]
-    @assert nhours(horizon) == length(xt_i) "Incorrect horizon of price independent single orders"
-    @assert nhours(horizon) == JuMP.size(xt_d)[2] "Incorrect horizon of price dependent single orders"
-    # @assert length(hours_per_block) == JuMP.size(xb)[2] "Incorrect horizon of block orders"
-    # @assert all([length(bidlevels[t]) .== JuMP.size(xt_d)[t] for t in hs]) "Incorrect number of possible orders in price dependent single orders"
+    @assert nhours(horizon) == length(xᴵ) "Incorrect horizon of price independent single orders"
+    @assert nhours(horizon) == JuMP.size(xᴰ)[2] "Incorrect horizon of price dependent single orders"
+    # @assert length(hours_per_block) == JuMP.size(xᴮ)[2] "Incorrect horizon of block orders"
+    # @assert all([length(bidlevels[t]) .== JuMP.size(xᴰ)[t] for t in hs]) "Incorrect number of possible orders in price dependent single orders"
 
     # Accumulate orders per hour
     single_orders = Vector{SingleOrder{eltype(bidlevels[1])}}(undef, nhours(horizon))
     for hour in 1:nhours(horizon)
-        single_d = [xt_d[order,hour] for order = 1:length(model.indices.bids)]
-        single_orders[hour] = SingleOrder(hour, xt_i[hour], single_d, bidlevels[hour])
+        single_d = [xᴰ[order,hour] for order = 1:length(model.indices.bids)]
+        single_orders[hour] = SingleOrder(hour, xᴵ[hour], single_d, bidlevels[hour])
     end
 
     block_orders = Vector{BlockOrder{eltype(bidlevels[1])}}()
     for (i,price) in enumerate(model.indices.blockbids)
         for (b,interval) in enumerate(model.indices.hours_per_block)
-            ordervolume = xb[i,b]
+            ordervolume = xᴮ[i,b]
             if ordervolume > 1e-6
                 price = blockbidprice(bidlevels, interval, i)
                 push!(block_orders, BlockOrder(tuple(interval[1]-1,interval[end]), ordervolume, price))
@@ -174,10 +174,10 @@ const KTHLBlue = KTH_colors[4]
 @recipe f(order::SingleOrder{T}) where T <: AbstractFloat = (order,[])
 @recipe f(order::SingleOrder{T},ρ::Real) where T <: AbstractFloat = (order,[ρ])
 @recipe f(order::SingleOrder{T},ρs...) where T <: AbstractFloat = (order,[ρs...])
-@recipe function f(order::SingleOrder{T},ρs::AbstractVector) where T <: AbstractFloat
+@recipe function f(order::SingleOrder{T}, ρs::AbstractVector) where T <: AbstractFloat
     hour = order.hour
     orderincrement = mean(abs.(diff(order.prices[2:end-1])))
-    maxorder = max(order.independent_volume,maximum(order.dependent_volumes))
+    maxorder = max(order.independent_volume, maximum(order.dependent_volumes))
 
     line_v = []
     line_p = []
@@ -206,6 +206,10 @@ const KTHLBlue = KTH_colors[4]
             end
         end
     end
+    idx = findfirst(v -> v == -500, line_p)
+    line_p[idx] = 0.
+    idx = findfirst(v -> v == 3000, line_p)
+    line_p[idx] = order.prices[end-1]+orderincrement
 
     v_outcomes = zeros(eltype(order.dependent_volumes),length(ρs))
     if !isempty(ρs)
@@ -226,21 +230,20 @@ const KTHLBlue = KTH_colors[4]
     end
 
     # Plot attributes
+    padding = maxorder/(2*length(order.dependent_volumes))
     xticks := LinRange(0, maxorder, length(order.prices))
     yticks := 0:orderincrement:order.prices[end-1]
-    ylims := (-orderincrement,order.prices[end-1]+orderincrement)
+    xlims := (-padding, maxorder+padding)
+    ylims := (-orderincrement, order.prices[end-1]+orderincrement)
     formatter := (d) -> @sprintf("%.2f",d)
 
     title := "Order Curve"
     xlabel := "Order Volume [MWh/h]"
     ylabel := "Price [EUR/MWh]"
-    tickfontsize := 14
+    legend := :topleft
     tickfontfamily := "sans-serif"
-    guidefontsize := 16
     guidefontfamily := "sans-serif"
-    titlefontsize := 18
     titlefontfamily := "sans-serif"
-    legendfontsize := 16
     legendfontfamily := "sans-serif"
 
     # Dashed line
@@ -250,14 +253,13 @@ const KTHLBlue = KTH_colors[4]
             linewidth := 2
             linecolor := :black
             label := ""
-            line_v,line_p
+            line_v, line_p
         end
     end
 
     # Price independent order
     @series begin
-        markercolor --> :green
-        markersize --> 8
+        markercolor --> KTHGreen
         seriestype := :scatter
         label := "Price Independent Order"
 
@@ -267,15 +269,13 @@ const KTHLBlue = KTH_colors[4]
     if any(v->v >= eps(),order.dependent_volumes)
         # Display the individual orders
         @series begin
-            markercolor := :brown
-            markersize := 8
+            markercolor := KTHBlue
             seriestype := :scatter
             label := "Price Dependent Order"
 
-            order.dependent_volumes,order.prices
+            order.dependent_volumes[2:end-1], order.prices[2:end-1]
         end
     end
-
     # Interpolation line
     if !isempty(interp_v)
         @series begin
@@ -290,9 +290,8 @@ const KTHLBlue = KTH_colors[4]
     # Display the trading outcomes
     if !isempty(v_outcomes)
         @series begin
-            markercolor := :green
+            markercolor := KTHGreen
             markershape := :diamond
-            markersize := 8
             seriestype := :scatter
             if length(ρs) > 1
                 label := "Trading Outcomes"
@@ -813,14 +812,12 @@ end
 
     @series begin
         title := "Single Orders"
-        annotationfontsize := 8
         subplot := 1
         strategy.single_orders,ρs
     end
 
     @series begin
         title := "Block Orders"
-        annotationfontsize := 10
         subplot := 2
         strategy.block_orders,ρs
     end

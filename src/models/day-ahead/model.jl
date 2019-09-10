@@ -21,29 +21,29 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             active_blocks(t) = findall(A->in(t,A),hours_per_block)
             # Variables
             # ========================================================
-            @variable(model, xt_i[t = hours] >= 0)
-            @variable(model, xt_d[i = bids, t = hours] >= 0)
+            @variable(model, xᴵ[t = hours] >= 0)
+            @variable(model, xᴰ[i = bids, t = hours] >= 0)
             if use_blockbids
-                @variable(model, xb[i = blockbids, b = blocks], lowerbound = 0, upperbound = regulations.blocklimit)
+                @variable(model, xᴮ[i = blockbids, b = blocks], lowerbound = 0, upperbound = regulations.blocklimit)
             else
-                @variable(model, xb)
+                @variable(model, xᴮ)
             end
             # Constraints
             # ========================================================
             # Increasing bid curve
             @constraint(model, bidcurve[i = bids[1:end-1], t = hours],
-                xt_d[i,t] <= xt_d[i+1,t]
+                xᴰ[i,t] <= xᴰ[i+1,t]
             )
             # Maximal bids
             if use_blockbids
                 @constraint(model, maxhourlybids[t = hours],
-                    xt_i[t] + xt_d[bids[end],t] + sum(xb[i,b]
+                    xᴵ[t] + xᴰ[bids[end],t] + sum(xᴮ[i,b]
                         for i in blockbids for b in active_blocks(t))
                             <= 2*sum(hydrodata[p].H̄ for p in plants)
                 )
             else
                 @constraint(model, maxhourlybids[t = hours],
-                    xt_i[t] + xt_d[bids[end],t] <= 2*sum(hydrodata[p].H̄ for p in plants)
+                    xᴵ[t] + xᴰ[bids[end],t] <= 2*sum(hydrodata[p].H̄ for p in plants)
                 )
             end
         end
@@ -71,24 +71,24 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 idx = findlast(blockbidlevel(b) .<= mean(ρ[hours_per_block[b]]))
                 return idx == nothing ? -1 : idx
             end
-            interpolate(ρ, bidlevels, xt_d, t) = begin
-                lower = ((ρ[t] - bidlevels[t][ih(t)])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xt_d[ih(t)+1,t]
-                upper = ((bidlevels[t][ih(t)+1]-ρ[t])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xt_d[ih(t),t]
+            interpolate(ρ, bidlevels, xᴰ, t) = begin
+                lower = ((ρ[t] - bidlevels[t][ih(t)])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xᴰ[ih(t)+1,t]
+                upper = ((bidlevels[t][ih(t)+1]-ρ[t])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xᴰ[ih(t),t]
                 return lower + upper
             end
             active_blocks(t) = findall(A->in(t,A),hours_per_block)
             # Variables
             # =======================================================
             # First stage
-            @decision xt_i xt_d xb
+            @decision xᴵ xᴰ xᴮ
             # -------------------------------------------------------
-            @variable(model, yt[t = hours] >= 0)
+            @variable(model, yᴴ[t = hours] >= 0)
             if use_blockbids
-                @variable(model, yb[b = blocks] >= 0)
+                @variable(model, yᴮ[b = blocks] >= 0)
             end
             if intraday_trading
-                @variable(model, z_up[t = hours] >= 0)
-                @variable(model, z_do[t = hours] >= 0)
+                @variable(model, y⁺[t = hours] >= 0)
+                @variable(model, y⁻[t = hours] >= 0)
             end
             @variable(model, Q[p = plants, s = segments, t = hours], lowerbound = 0, upperbound = hydrodata[p].Q̄[s])
             @variable(model, S[p = plants, t = hours] >= 0)
@@ -103,18 +103,18 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             # Net profit
             if use_blockbids
                 @expression(model, net_profit,
-                    sum((ρ[t]-regulations.dayaheadfee)*yt[t]
+                    sum((ρ[t]-regulations.dayaheadfee)*yᴴ[t]
                         for t = hours)
-                    + sum(length(hours_per_block[b])*(mean(ρ[hours_per_block[b]])-regulations.dayaheadfee)*yb[b]
+                    + sum(length(hours_per_block[b])*(mean(ρ[hours_per_block[b]])-regulations.dayaheadfee)*yᴮ[b]
                         for b = blocks))
             else
                 @expression(model, net_profit,
-                    sum((ρ[t]-regulations.dayaheadfee)*yt[t]
+                    sum((ρ[t]-regulations.dayaheadfee)*yᴴ[t]
                         for t in hours))
             end
             # Intraday
             @expression(model, intraday,
-                sum((penalty(ξ,t)*z_up[t] + regulations.intradayfee) - (reward(ξ,t) - regulations.intradayfee)*z_do[t]
+                sum((penalty(ξ,t)*y⁺[t] + regulations.intradayfee) - (reward(ξ,t) - regulations.intradayfee)*y⁻[t]
                     for t in hours))
             # Value of stored water
             @expression(model, value_of_stored_water, -sum(W[i] for i in 1:nindices(water_value)))
@@ -129,11 +129,11 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             # ========================================================
             # Bid-dispatch links
             @constraint(model, hourlybids[t = hours],
-                yt[t] == interpolate(ρ, bidlevels, xt_d, t) + xt_i[t]
+                yᴴ[t] == interpolate(ρ, bidlevels, xᴰ, t) + xᴵ[t]
             )
             if use_blockbids
                 @constraint(model, bidblocks[b = blocks],
-                    yb[b] == sum(xb[j,b]
+                    yᴮ[b] == sum(xᴮ[j,b]
                         for j in 1:ib(b)))
             end
 
@@ -159,21 +159,21 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             if intraday_trading
                 if use_blockbids
                     @constraint(model, loadbalance[t = hours],
-                        yt[t] + sum(yb[b] for b in active_blocks(t)) - H[t] == z_up[t] - z_do[t]
+                        yᴴ[t] + sum(yᴮ[b] for b in active_blocks(t)) - H[t] == y⁺[t] - y⁻[t]
                     )
                 else
                     @constraint(model, loadbalance[t = hours],
-                        yt[t] - H[t] == z_up[t] - z_do[t]
+                        yᴴ[t] - H[t] == y⁺[t] - y⁻[t]
                     )
                 end
             else
                 if use_blockbids
                     @constraint(model, loadbalance[t = hours],
-                        yt[t] + sum(yb[b] for b in active_blocks(t)) == H[t]
+                        yᴴ[t] + sum(yᴮ[b] for b in active_blocks(t)) == H[t]
                     )
                 else
                     @constraint(model, loadbalance[t = hours],
-                        yt[t] == H[t]
+                        yᴴ[t] == H[t]
                     )
                 end
             end

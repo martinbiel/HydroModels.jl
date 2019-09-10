@@ -56,7 +56,9 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 data = data
             end
             @unpack hours, plants, segments, blocks, hours_per_block = indices
-            @unpack hydrodata, water_value, regulations, intraday_trading, use_blockbids, bidlevels = data
+            @unpack hydrodata, water_value, regulations, intraday_trading, penalty_percentage, use_blockbids, bidlevels = data
+            α = penalty_percentage
+            β = α == 0.0 ? 0.0 : 1/α
             @uncertain ρ Q̃ from ξ::DayAheadScenario
             V = local_inflows(Q̃, hydrodata.Qu)
             # Auxilliary functions
@@ -114,7 +116,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             end
             # Intraday
             @expression(model, intraday,
-                sum((penalty(ξ,t)*y⁺[t] + regulations.intradayfee) - (reward(ξ,t) - regulations.intradayfee)*y⁻[t]
+                sum((penalty(ξ,α,t)*y⁺[t] + regulations.intradayfee) - (reward(ξ,β,t) - regulations.intradayfee)*y⁻[t]
                     for t in hours))
             # Value of stored water
             @expression(model, value_of_stored_water, -sum(W[i] for i in 1:nindices(water_value)))

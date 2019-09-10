@@ -16,12 +16,20 @@ function penalty(scenario::DayAheadScenario, t)
         return 1.1*scenario.ρ[t]
     end
 end
+function penalty(scenario::DayAheadScenario, α, t)
+    α == 0.0 && return penalty(scenario, t)
+    return α*scenario.ρ[t]
+end
 function reward(scenario::DayAheadScenario, t)
     if 8 <= t <= 12 || 17 <= t <= 24
         return 0.85*scenario.ρ[t]
     else
         return 0.9*scenario.ρ[t]
     end
+end
+function reward(scenario::DayAheadScenario, β, t)
+    β == 0.0 && return reward(scenario, t)
+    return β*scenario.ρ[t]
 end
 
 @sampler RecurrentDayAheadSampler = begin

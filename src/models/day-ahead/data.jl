@@ -43,7 +43,7 @@ function DayAheadData(plantfilename::String, watervalue_filename, bidlevelsets::
         prepend!(bidlevels[i], regulations.lowerorderlimit)
         push!(bidlevels[i], regulations.upperorderlimit)
     end
-    DayAheadData(plantdata, water_value, regulations, bidlevels, intraday_trading = intraday_trading, use_blockbids = use_blockbids)
+    DayAheadData(plantdata, water_value, regulations, bidlevels, intraday_trading = intraday_trading, penalty_percentage = penalty_percentage, use_blockbids = use_blockbids)
 end
 
 function DayAheadData(plantfilename::String, watervalue_filename, bidlevels::AbstractVector; intraday_trading = true, use_blockbids = true)

@@ -306,7 +306,7 @@ end
 @recipe f(orders::Vector{SingleOrder{T}}) where T <: AbstractFloat = (orders,[])
 @recipe f(orders::Vector{SingleOrder{T}},ρ::Real) where T <: AbstractFloat = (orders,[ρ])
 @recipe f(orders::Vector{SingleOrder{T}},ρs...) where T <: AbstractFloat = (orders,[ρs...])
-@recipe function f(orders::Vector{SingleOrder{T}}, ρs::AbstractVector; annotationfontsize = 12) where T <: AbstractFloat
+@recipe function f(orders::Vector{SingleOrder{T}}, ρs::AbstractVector) where T <: AbstractFloat
     prices = orders[findmax([o.prices[end-1] for o in orders])[2]].prices
     orderincrement = mean(abs.(diff(prices[2:end-1])))
     ρ_min = !isempty(ρs) ? minimum(ρs) : []
@@ -318,13 +318,13 @@ end
     rect(x,y,w,h) = Shape(x .+ [0,w,w,0,0],y .+ [0,0,h,h,0])
     formatter = (d) -> begin
         if abs(d) <= sqrt(eps())
-            text("0.0",font(annotationfontsize,"sans-serif",:white))
+            text("0.0",font("sans-serif",:white))
         elseif (log10(d) < -2.0 || log10(d) > 3.0)
-            text(@sprintf("%.1e",d),font(annotationfontsize,"sans-serif",:white))
+            text(@sprintf("%.1e",d),font("sans-serif",:white))
         elseif log10(d) > 2.0
-            text(@sprintf("%.1f",d),font(annotationfontsize,"sans-serif",:white))
+            text(@sprintf("%.1f",d),font("sans-serif",:white))
         else
-            text(@sprintf("%.2f",d),font(annotationfontsize,"sans-serif",:white))
+            text(@sprintf("%.2f",d),font("sans-serif",:white))
         end
     end
 
@@ -403,11 +403,11 @@ end
     height = highest+2*orderincrement
     # Independent Volume label
     push!(independent_bars,rect(25,-orderincrement,1.0,0.5*height))
-    push!(ordervolumes,(25.5,0.25*height-orderincrement,text("Independent Volume [MWh]",font(annotationfontsize,"sans-serif", :white, rotation = -90.))))
+    push!(ordervolumes,(25.5,0.25*height-orderincrement,text("Independent Volume [MWh]",font("sans-serif", :white, rotation = -90.))))
     # Dependent Volume label
     push!(accepted,length(dependent_bars)+1)
     push!(dependent_bars,rect(25,0.5*height-orderincrement,1.0,0.5*height))
-    push!(ordervolumes,(25.5,0.75*height-orderincrement,text("Dependent Volumes [Mwh]",font(annotationfontsize,"sans-serif", :white, rotation = -90.))))
+    push!(ordervolumes,(25.5,0.75*height-orderincrement,text("Dependent Volumes [Mwh]",font("sans-serif", :white, rotation = -90.))))
 
     # Plot attributes
     xticks := collect(0:24)
@@ -418,13 +418,9 @@ end
     else
         yticks := 0:orderincrement:highest
     end
-    tickfontsize := 14
     tickfontfamily := "sans-serif"
-    guidefontsize := 16
     guidefontfamily := "sans-serif"
-    titlefontsize := 22
     titlefontfamily := "sans-serif"
-    legendfontsize := 16
     legendfontfamily := "sans-serif"
 
     legend := :topleft
@@ -516,16 +512,16 @@ function Base.show(io::IO, order::BlockOrder)
 end
 
 @recipe f(order::BlockOrder{T}) where T <: AbstractFloat = order,[]
-@recipe function f(order::BlockOrder{T},ρs::AbstractVector; annotationfontsize = 14) where T <: AbstractFloat
+@recipe function f(order::BlockOrder{T},ρs::AbstractVector) where T <: AbstractFloat
     ρ_min = !isempty(ρs) ? minimum(ρs) : []
     ρ_max = !isempty(ρs) ? maximum(ρs) : []
     δρ = !isempty(ρs) ? mean(abs.(diff(ρs))) : []
     p_max = order.price .+ δρ
     highest = !isempty(ρs) ? max(p_max,ρ_max) : p_max
-    annotation_font = font(annotationfontsize,"sans-serif",:white)
+    annotation_font = font("sans-serif",:white)
     formatter = (d) -> begin
         if abs(d) <= sqrt(eps())
-            text("0.0",font(annotationfontsize,"sans-serif",:white))
+            text("0.0",font("sans-serif",:white))
         elseif (log10(d) < -2.0 || log10(d) > 3.0)
             text(@sprintf("%.2e",d),annotation_font)
         elseif log10(d) > 2.0
@@ -569,13 +565,9 @@ end
         yticks := []
     end
     title := "Block Order"
-    tickfontsize := 14
     tickfontfamily := "sans-serif"
-    guidefontsize := 16
     guidefontfamily := "sans-serif"
-    titlefontsize := 22
     titlefontfamily := "sans-serif"
-    legendfontsize := 16
     legendfontfamily := "sans-serif"
     title := "Block Order"
     xlabel := "Hour"
@@ -616,7 +608,7 @@ end
 end
 
 @recipe f(orders::Vector{BlockOrder{T}}) where T <: AbstractFloat = orders,[]
-@recipe function f(orders::Vector{BlockOrder{T}},ρs::AbstractVector; annotationfontsize = 14) where T <: AbstractFloat
+@recipe function f(orders::Vector{BlockOrder{T}},ρs::AbstractVector) where T <: AbstractFloat
     if !isempty(ρs) && length(ρs) != 24
         throw(ArgumentError("Need to supply a price vector for the whole day when showing block orders"))
     end
@@ -629,10 +621,10 @@ end
     highest = !isempty(ρs) ? max(p_max,ρ_max) : p_max
     levels = collect(1:1:length(orders))
     sorted = sort(orders,by=(order)->order.price)
-    annotation_font = font(annotationfontsize,"sans-serif",:white)
+    annotation_font = font("sans-serif",:white)
     formatter = (d) -> begin
         if abs(d) <= sqrt(eps())
-            text("0.0",font(annotationfontsize,"sans-serif",:white))
+            text("0.0",font("sans-serif",:white))
         elseif (log10(d) < -2.0 || log10(d) > 3.0)
             text(@sprintf("%.2e",d),annotation_font)
         elseif log10(d) > 2.0
@@ -704,18 +696,14 @@ end
         yticks := []
     end
     yformatter := (d) -> @sprintf("%.2f",d)
-    tickfontsize := 14
     tickfontfamily := "sans-serif"
-    guidefontsize := 16
     guidefontfamily := "sans-serif"
-    titlefontsize := 22
     titlefontfamily := "sans-serif"
-    legendfontsize := 16
     legendfontfamily := "sans-serif"
     color_palette := KTH_colors
     title := "Block Orders"
     xlabel := "Hour"
-    ylabel := !isempty(ρs) ? "Price [EUR/MWh]" : ""
+    ylabel := "Price [EUR/MWh]"
     annotations --> orderinfos
 
     # Legend

@@ -119,21 +119,21 @@ mutable struct StochasticHydroModel{D <: AbstractModelData,
         I = typeof(indices)
         stochasticmodel = modelgenerator(horizon, data, indices)
         SM = typeof(stochasticmodel)
-        saa = SAA(stochasticmodel, sampler, n)
-        SP = typeof(saa)
-        hydromodel = new{D,I,SM,SP}(name, horizon, data, indices, stochasticmodel, saa, Dict(:rp=>:Unplanned,:evp=>:Unplanned))
+        sp = instantiate(stochasticmodel, sampler, n)
+        SP = typeof(sp)
+        hydromodel = new{D,I,SM,SP}(name, horizon, data, indices, stochasticmodel, sp, Dict(:rp=>:Unplanned,:evp=>:Unplanned))
         return hydromodel
     end
 end
 
 function show(io::IO, hydromodel::StochasticHydroModel)
     if get(io, :multiline, false)
-        print(io,string("Stochastic Hydro Power Model : ", modelname(hydromodel), ", including ", length(plants(hydromodel.indices)), " power stations, over a ", nhours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)), " featuring ", nscenarios(hydromodel.internalmodel), " scenarios")
+        print(io,string("Stochastic Hydro Power Model : ", modelname(hydromodel), ", including ", length(plants(hydromodel.indices)), " power stations, over a ", nhours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)), " featuring ", num_scenarios(hydromodel.internalmodel), " scenarios")
     else
         println(io,string("Stochastic Hydro Power Model : ", modelname(hydromodel)))
         println(io,string("    including ", length(plants(hydromodel.indices)), " power stations"))
         println(io,string("    over a ", nhours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)))
-        println(io,string("    featuring ", nscenarios(hydromodel.internalmodel), " scenarios"))
+        println(io,string("    featuring ", num_scenarios(hydromodel.internalmodel), " scenarios"))
         println(io,"")
         showstatus(io,hydromodel)
     end
@@ -185,20 +185,20 @@ end
 function reinitialize!(hydromodel::StochasticHydroModel, horizon::Horizon, sampler::AbstractSampler, n::Integer; kw...)
     hydromodel.horizon = horizon
     hydromodel.indices = modelindices(hydromodel.data, horizon; kw...)
-    hydromodel.internalmodel = SAA(hydromodel.stochasticmodel,
-                                   sampler,
-                                   n;
-                                   horizon = hydromodel.horizon,
-                                   indices = hydromodel.indices,
-                                   data = hydromodel.data)
+    hydromodel.internalmodel = instantiate(hydromodel.stochasticmodel,
+                                           sampler,
+                                           n;
+                                           horizon = hydromodel.horizon,
+                                           indices = hydromodel.indices,
+                                           data = hydromodel.data)
     hydromodel.status[:rp] = :Unplanned
     hydromodel.status[:evp] = :Unplanned
     return hydromodel
 end
 
 function plan!(hydromodel::StochasticHydroModel; variant = :rp, optimsolver = GLPKSolverLP())
-    solvestatus = if variant == :rp
-        StochasticPrograms.optimize!(hydromodel.internalmodel, solver=optimsolver)
+    if variant == :rp
+        StochasticPrograms.optimize!(hydromodel.internalmodel)
     elseif variant == :evp
         evp = EVP(hydromodel.internalmodel, solver = optimsolver)
         solve(evp)
@@ -206,7 +206,7 @@ function plan!(hydromodel::StochasticHydroModel; variant = :rp, optimsolver = GL
         error("Unknown variant: ",variant)
     end
 
-    if solvestatus == :Optimal
+    if termination_status(hydromodel.internalmodel) == MOI.OPTIMAL
         hydromodel.status[variant] = :Planned
     else
         hydromodel.status[variant] = :Failed
@@ -306,9 +306,9 @@ plan_evp!(hydromodel::StochasticHydroModel) = plan!(hydromodel,:evp)
 #                     I = typeof(indices)
 #                     stochasticmodel = $(esc(modeldef))
 #                     SM = typeof(stochasticmodel)
-#                     saa = SAA(stochasticmodel, sampler, n; horizon = horizon, indices = indices, data = data)
-#                     SP = typeof(saa)
-#                     hydromodel = new{D,I,SM,SP}(horizon, data, indices, stochasticmodel, saa, Dict(:rp=>:Unplanned,:evp=>:Unplanned))
+#                     sp = instantiate(stochasticmodel, sampler, n; horizon = horizon, indices = indices, data = data)
+#                     SP = typeof(sp)
+#                     hydromodel = new{D,I,SM,SP}(horizon, data, indices, stochasticmodel, sp, Dict(:rp=>:Unplanned,:evp=>:Unplanned))
 #                     return hydromodel
 #                 end
 #             end

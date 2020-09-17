@@ -17,8 +17,6 @@ using Parameters
 using Reexport
 using MacroTools
 using MacroTools: postwalk, @q
-using MathProgBase
-using MathProgBase.SolverInterface
 using DelimitedFiles
 using Flux
 using BSON

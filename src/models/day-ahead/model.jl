@@ -21,12 +21,10 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             active_blocks(t) = findall(A->in(t,A),hours_per_block)
             # Variables
             # ========================================================
-            @variable(model, xᴵ[t = hours] >= 0)
-            @variable(model, xᴰ[i = bids, t = hours] >= 0)
+            @decision(model, xᴵ[t = hours] >= 0)
+            @decision(model, xᴰ[i = bids, t = hours] >= 0)
             if use_blockbids
-                @variable(model, xᴮ[i = blockbids, b = blocks], lowerbound = 0, upperbound = regulations.blocklimit)
-            else
-                @variable(model, xᴮ)
+                @decision(model, 0 <= xᴮ[i = blockbids, b = blocks] <= regulations.blocklimit)
             end
             # Constraints
             # ========================================================
@@ -81,8 +79,6 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             active_blocks(t) = findall(A->in(t,A),hours_per_block)
             # Variables
             # =======================================================
-            # First stage
-            @decision xᴵ xᴰ xᴮ
             # -------------------------------------------------------
             @variable(model, yᴴ[t = hours] >= 0)
             if use_blockbids
@@ -92,9 +88,9 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 @variable(model, y⁺[t = hours] >= 0)
                 @variable(model, y⁻[t = hours] >= 0)
             end
-            @variable(model, Q[p = plants, s = segments, t = hours], lowerbound = 0, upperbound = hydrodata[p].Q̄[s])
+            @variable(model, 0 <= Q[p = plants, s = segments, t = hours] <= hydrodata[p].Q̄[s])
             @variable(model, S[p = plants, t = hours] >= 0)
-            @variable(model, M[p = plants, t = hours], lowerbound = 0, upperbound = hydrodata[p].M̄)
+            @variable(model, 0 <= M[p = plants, t = hours] <= hydrodata[p].M̄)
             @variable(model, W[i = 1:nindices(water_value)])
             @variable(model, H[t = hours] >= 0)
             @variable(model, Qf[p = plants, t = hours] >= 0)
@@ -182,49 +178,47 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 end
             end
             # Water flow: Discharge + Spillage
-            @constraintref Qflow[1:length(plants),1:nhours(horizon)]
-            @constraintref Sflow[1:length(plants),1:nhours(horizon)]
-            for (pidx,p) = enumerate(plants)
-                for t = hours
-                    if t - hydrodata[p].Rqh > 1
-                        Qflow[pidx,t] = @constraint(model,
-                            Qf[p,t] == (hydrodata[p].Rqm/60)*sum(Q[p,s,t-(hydrodata[p].Rqh+1)]
-                                 for s in segments)
-                            + (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                 for s in segments)
-                        )
-                    elseif t - hydrodata[p].Rqh > 0
-                        Qflow[pidx,t] = @constraint(model,
-                            Qf[p,t] == (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                 for s in segments)
-                            )
-                    else
-                        Qflow[pidx,t] = @constraint(model,
-                            Qf[p,t] == 0
-                        )
-                    end
-                    if t - hydrodata[p].Rsh > 1
-                        Sflow[pidx,t] = @constraint(model,
-                            Sf[p,t] == (hydrodata[p].Rsm/60)*S[p,t-(hydrodata[p].Rsh+1)]
-                            + (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
-                        )
-                    elseif t - hydrodata[p].Rsh > 0
-                        Sflow[pidx,t] = @constraint(model,
-                            Sf[p,t] == (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
-                        )
-                    else
-                        Sflow[pidx,t] = @constraint(model,
-                            Sf[p,t] == 0
-                        )
-                    end
+            Containers.@container [p = plants, t = hours] begin
+                if t - hydrodata[p].Rqh > 1
+                    @constraint(model,
+                                Qf[p,t] == (hydrodata[p].Rqm/60)*sum(Q[p,s,t-(hydrodata[p].Rqh+1)]
+                                                                     for s = segments)
+                                + (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
+                                                              for s = segments)
+                                )
+                elseif t - hydrodata[p].Rqh > 0
+                    @constraint(model,
+                                Qf[p,t] == (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
+                                                                       for s = segments)
+                                )
+                else
+                    @constraint(model,
+                                Qf[p,t] == 0
+                                )
+                end
+            end
+            Containers.@container [p = plants,  t = hours] begin
+                if t - hydrodata[p].Rsh > 1
+                    @constraint(model,
+                                Sf[p,t] == (hydrodata[p].Rsm/60)*S[p,t-(hydrodata[p].Rsh+1)]
+                                + (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
+                                )
+                elseif t - hydrodata[p].Rsh > 0
+                    @constraint(model,
+                                Sf[p,t] == (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
+                                )
+                else
+                    @constraint(model,
+                                Sf[p,t] == 0
+                                )
                 end
             end
             # Water value
             @constraint(model, water_value_approximation[c = 1:ncuts(water_value)],
-                sum(water_value[c][p]*M[p,nhours(horizon)]
-                    for p in plants)
-                + sum(W[i]
-                    for i in cut_indices(water_value[c])) >= cut_lb(water_value[c]))
+                        sum(water_value[c][p]*M[p,nhours(horizon)]
+                            for p in plants)
+                        + sum(W[i]
+                              for i in cut_indices(water_value[c])) >= cut_lb(water_value[c]))
         end
     end
     return stochasticmodel

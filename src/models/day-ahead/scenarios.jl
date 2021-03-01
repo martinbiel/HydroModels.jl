@@ -1,4 +1,4 @@
-@scenario DayAheadScenario = begin
+@define_scenario DayAheadScenario = begin
     ρ::PriceCurve{24,Float64}
     Q̃::Inflows{typeof(Skellefteälven),Float64}
 

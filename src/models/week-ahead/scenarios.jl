@@ -1,4 +1,4 @@
-@scenario WeekAheadScenario = begin
+@define_scenario WeekAheadScenario = begin
     ρ::PriceCurve{168,Float64}
     Q̃::InflowSequence{7,typeof(Skellefteälven),Float64}
 

@@ -60,7 +60,7 @@ function forecast(forecaster::Forecaster{:price}, starting_price::T, month::Inte
     λ[1] = starting_price
     for i = 2:24
         input = vcat(scale(forecaster.scaling, λ[i-1]), i/24, month/12)
-        λ[i] = forecaster.network(input)[1]
+        λ[i] = forecaster.network(Float32.(input))[1]
     end
     return λ
 end
@@ -68,10 +68,10 @@ end
 function forecast(forecaster::Forecaster{:price}, month::Integer)
     Flux.reset!(forecaster.network)
     λ = Vector{Float64}(undef, 24)
-    λ[1] = forecaster.initializer(vcat(randn(), month/12))[1]
+    λ[1] = forecaster.initializer(Float32.(vcat(randn(), month/12)))[1]
     for i = 2:24
         input = vcat(scale(forecaster.scaling, λ[i-1]), i/24, month/12)
-        λ[i] = forecaster.network(input)[1]
+        λ[i] = forecaster.network(Float32.(input))[1]
     end
     return λ
 end
@@ -82,7 +82,7 @@ function forecast(forecaster::Forecaster{:flow}, starting_flows::Vector{T}, week
     flows[:,1] = starting_flows
     for i = 2:7
         input = vcat([scale(forecaster.scaling, f) for f in flows[:,i-1]], i/7, week/52)
-        flows[:,i] = forecaster.network(input)[:]
+        flows[:,i] = forecaster.network(Float32.(input))[:]
     end
     return flows
 end
@@ -91,10 +91,10 @@ function forecast(forecaster::Forecaster{:flow}, week::Int)
     Flux.reset!(forecaster.network)
     nplants = size(forecaster.initializer.layers[1].W, 2) - 1
     flows = Matrix{Float64}(undef, nplants, 7)
-    flows[:,1] = forecaster.initializer(vcat(randn(nplants), week/52))[:]
+    flows[:,1] = forecaster.initializer(Float32.(vcat(randn(nplants), week/52)))[:]
     for i = 2:7
         input = vcat([scale(forecaster.scaling, f) for f in flows[:,i-1]], i/7, week/52)
-        flows[:,i] = forecaster.network(input)[:]
+        flows[:,i] = forecaster.network(Float32.(input))[:]
     end
     return flows
 end

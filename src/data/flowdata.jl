@@ -64,14 +64,14 @@ struct InflowSequence{N, P <: PlantCollection, T <: AbstractFloat} <: AbstractVe
         P = typeof(plants)
         N = size(inflows, 2)
         T = eltype(inflows)
-        return new{N,P,T}([Inflows(plants, inflows(:,j)) for j in size(inflows,2)])
+        return new{N,P,T}([Inflows(plants, inflows[:,j]) for j in 1:size(inflows,2)])
     end
 
     function InflowSequence(::Type{P}, inflows::AbstractMatrix) where P <: PlantCollection
         nplants(P) == size(inflows,1) || error("Inconsistent number of power stations and inflows.")
         N = size(inflows, 2)
         T = eltype(inflows)
-        return new{N,P,T}([Inflows(P, inflows(:,j)) for j in size(inflows,2)])
+        return new{N,P,T}([Inflows(P, inflows[:,j]) for j in 1:size(inflows,2)])
     end
 end
 
@@ -102,11 +102,11 @@ Base.IndexStyle(::Type{<:InflowSequence}) = Base.IndexLinear()
 horizon(inflowseq::InflowSequence{N}) where N = Days(N)
 
 function Statistics.mean(sequences::Vector{InflowSequence{N,P,T}}) where {N, P <: PlantCollection, T <: AbstractFloat}
-    inflow_sequence = [mean([sequence[f] for sequence in sequences]) for i in 1:N]
-    return Inflows(P, inflow_sequence)
+    inflow_sequence = [mean([sequence[i] for sequence in sequences]) for i in 1:N]
+    return InflowSequence(inflow_sequence)
 end
 
 function local_inflow_sequence(sequence::InflowSequence{N,P}, upstream_plants::Dict{Plant, Vector{Plant}}) where {N, P <: PlantCollection}
     local_inflow_sequence = [local_inflows(sequence[d], upstream_plants) for d in 1:N]
-    return InflowSequence(P, local_inflow_sequence)
+    return InflowSequence(local_inflow_sequence)
 end

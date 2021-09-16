@@ -13,12 +13,13 @@ mutable struct HydroPlantData{T <: AbstractFloat, S}
     Rqm::Int             # Discharge flow time in remaining minutes
     Rsh::Int             # Spillage flow time in whole hours
     Rsm::Int             # Spillage flow time in remaining minutes
+    Mt::Int              # Maintenance time in whole hours
     Q̃::T                 # Yearly mean flow of each plant
     V::T                 # Local inflow
 
-    function (::Type{HydroPlantData})(M₀::AbstractFloat,M̄::AbstractFloat,H̄::AbstractFloat,Q̄::NTuple{S,<:AbstractFloat},μ::NTuple{S,<:AbstractFloat},S̱::AbstractFloat,Rgh::Integer,Rqm::Integer,Rsh::Integer,Rsm::Integer,Q̃::AbstractFloat,V::AbstractFloat) where S
+    function (::Type{HydroPlantData})(M₀::AbstractFloat,M̄::AbstractFloat,H̄::AbstractFloat,Q̄::NTuple{S,<:AbstractFloat},μ::NTuple{S,<:AbstractFloat},S̱::AbstractFloat,Rgh::Integer,Rqm::Integer,Rsh::Integer,Rsm::Integer,Mt,Q̃::AbstractFloat,V::AbstractFloat) where S
         T = promote_type(typeof(M₀),typeof(M̄),typeof(H̄),eltype(Q̄),eltype(μ),typeof(S̱),typeof(Q̃),typeof(V),Float32)
-        return new{T,S}(M₀,M̄,H̄,Q̄,μ,S̱,Rgh,Rqm,Rsh,Rsm,Q̃,V)
+        return new{T,S}(M₀,M̄,H̄,Q̄,μ,S̱,Rgh,Rqm,Rsh,Rsm,Mt,Q̃,V)
     end
 end
 Base.eltype(::HydroPlantData{T}) where T <: AbstractFloat = T
@@ -63,6 +64,7 @@ struct HydroPlantCollection{T <: AbstractFloat, S}
                                   Q̃::AbstractVector,
                                   Rq::Vector{Int},
                                   Rs::Vector{Int},
+                                  Mt::Vector{Int},
                                   rivers::Vector{String},
                                   areas::Vector{Area}) where S
         T = promote_type(eltype(H̄),eltype(Q̄),eltype(S̱),eltype(M̄),eltype(Q̃),Float32)
@@ -74,7 +76,7 @@ struct HydroPlantCollection{T <: AbstractFloat, S}
                              Dict{Plant,Vector{Plant}}(),
                              Dict{Plant,Vector{Plant}}(),
                              Dict{Plant,Vector{Plant}}(),)
-        define_model_parameters(modeldata,plantnames,Qlinks,Slinks,convert(Vector{T},H̄),convert(Vector{T},Q̄),convert(Vector{T},S̱),convert(Vector{T},M̄),convert(Vector{T},Q̃),Rq,Rs,rivers,areas)
+        define_model_parameters(modeldata,plantnames,Qlinks,Slinks,convert(Vector{T},H̄),convert(Vector{T},Q̄),convert(Vector{T},S̱),convert(Vector{T},M̄),convert(Vector{T},Q̃),Rq,Rs,Mt,rivers,areas)
         return modeldata
     end
 
@@ -117,9 +119,10 @@ function HydroPlantCollection(plantnames::Vector{String},
                               Q̃::AbstractVector,
                               Rq::Vector{Int},
                               Rs::Vector{Int},
+                              Mt::Vector{Int},
                               rivers::Vector{String},
                               areas::Vector{Area})
-    return HydroPlantCollection(Segmenter{2},plantnames,Qlinks,Slinks,H̄,Q̄,S̱,M̄,Q̃,Rq,Rs,rivers,areas)
+    return HydroPlantCollection(Segmenter{2},plantnames,Qlinks,Slinks,H̄,Q̄,S̱,M̄,Q̃,Rq,Rs,Mt,rivers,areas)
 end
 
 function HydroPlantCollection(plant_filename::String)
@@ -195,6 +198,7 @@ function define_model_parameters(collection::HydroPlantCollection{T,S},
                                  Q̃::Vector{T},
                                  Rq::Vector{Int},
                                  Rs::Vector{Int},
+                                 Mt::Vector{Int},
                                  rivers::Vector{String},
                                  areas::Vector{Area}) where {T <: AbstractFloat, S}
     Vsf = 0.2278           # Scale factor for local inflow (0.2278)
@@ -227,22 +231,23 @@ function define_model_parameters(collection::HydroPlantCollection{T,S},
         p = collection.plants[i]
         V = calculate_inflow(p,w,collection.Qu[p])
         collection.plantdata[p] = HydroPlantData(δ*M̄[i],
-                                                M̄[i],
-                                                H̄[i],
-                                                Q̄s,
-                                                μs,
-                                                S̱[i],
-                                                floor(Int64,Rq[i]/60),
-                                                mod(Rq[i],60),
-                                                floor(Int64,Rs[i]/60),
-                                                mod(Rs[i],60),
-                                                Vsf*Q̃[i],
-                                                V)
+                                                 M̄[i],
+                                                 H̄[i],
+                                                 Q̄s,
+                                                 μs,
+                                                 S̱[i],
+                                                 floor(Int64,Rq[i]/60),
+                                                 mod(Rq[i],60),
+                                                 floor(Int64,Rs[i]/60),
+                                                 mod(Rs[i],60),
+                                                 Mt[i],
+                                                 Vsf*Q̃[i],
+                                                 V)
     end
 end
 
 function define_model_parameters(collection::HydroPlantCollection{T}, plantdata::Matrix) where T <: AbstractFloat
-    @assert size(plantdata,2) == 12 "Invalid plant data format"
+    @assert size(plantdata,2) == 13 "Invalid plant data format"
 
     define_model_parameters(collection,
                             convert(Vector{String},plantdata[:,1]),
@@ -255,8 +260,9 @@ function define_model_parameters(collection::HydroPlantCollection{T}, plantdata:
                             convert(Vector{T},plantdata[:,8]),
                             convert(Vector{Int},plantdata[:,9]),
                             convert(Vector{Int},plantdata[:,10]),
-                            convert(Vector{String},plantdata[:,11]),
-                            convert(Vector{Area},plantdata[:,12]))
+                            convert(Vector{Int},plantdata[:,11]),
+                            convert(Vector{String},plantdata[:,12]),
+                            convert(Vector{Area},plantdata[:,13]))
 end
 
 function define_model_parameters(collection::HydroPlantCollection, plantfilename::String)

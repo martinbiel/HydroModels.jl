@@ -28,6 +28,6 @@ end
         while !all(flows[:, 2] .>= 0)
             flows = forecast(sampler.flow_forecaster, week(sampler.date))
         end
-        return WeekAheadScenario(PriceCurve(price_curve), InflowSequence(sampler,plants, flows))
+        return WeekAheadScenario(PriceCurve(price_curve), InflowSequence(sampler.plants, flows))
     end
 end

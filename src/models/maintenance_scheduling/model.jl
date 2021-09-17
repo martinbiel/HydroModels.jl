@@ -86,8 +86,6 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
             # Pause production during maintenance hours
             @constraint(model, pause_production[p in plants, s in segments, t in hours],
                         Q[p,s,t] <= (1 - maintenance_period[p,t])*hydrodata[p].Q̄[s])
-            @constraint(model, pause_spillage[p in plants, t in hours],
-                        S[p,t] <= (1 - maintenance_period[p,t])*hydrodata[p].M̄)
             # Hydrological balance
             @constraint(model, hydro_constraints[p = plants, t = hours],
                         # Previous reservoir content

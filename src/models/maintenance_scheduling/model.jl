@@ -16,11 +16,13 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
                 indices = indices
                 data = data
             end
-            @unpack hours, plants = indices
+            @unpack hours, plants, bids = indices
             @unpack hydrodata = data
             # Variables
             # ========================================================
             #@decision(model, maintenance_start[p in plants, t in hours], Bin)
+            @decision(model, xᴵ[t = hours] >= 0)
+            @decision(model, xᴰ[i = bids, t = hours] >= 0)
             @decision(model, maintenance_period[p in plants, t in hours], Bin)
             # Objectives
             # ========================================================
@@ -38,9 +40,14 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
                         maintenance_period[p,t] - (t > 2 ? maintenance_period[p,t-1] : 0) <= ((t + hydrodata[p].Mt - 1) <= nhours(horizon) ? maintenance_period[p,t+hydrodata[p].Mt-1] : 0))
             @constraint(model, maintenance_finished[p in plants],
                         sum(maintenance_period[p,t] for t in hours) == hydrodata[p].Mt)
-            # Only allow one maintenance effort per hour
-            @constraint(model, maintenance_concurrency[t in hours],
-                        sum(maintenance_period[p,t] for p in plants) <= 1)
+            # Increasing bid curve
+            @constraint(model, bidcurve[i = bids[1:end-1], t = hours],
+                xᴰ[i,t] <= xᴰ[i+1,t]
+            )
+            # Maximal bids
+            @constraint(model, maxhourlybids[t = hours],
+                        xᴵ[t] + xᴰ[bids[end],t] <= 2*sum(hydrodata[p].H̄ for p in plants)
+                        )
         end
         # Second stage
         # =======================================================
@@ -51,13 +58,25 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
                 data = data
             end
             @unpack hours, plants, segments = indices
-            @unpack hydrodata = data
-            @uncertain ρ Q̃ from MaintenanceSchedulingScenario
+            @unpack hydrodata, bidlevels = data
+            @uncertain ρ Q̃ from ξ::MaintenanceSchedulingScenario
             V = local_inflows(Q̃, hydrodata.Qu)
+            # Auxilliary functions
+            ih(t) = begin
+                idx = findlast(bidlevels[t] .<= ρ[t])
+                return idx == nothing ? -1 : idx
+            end
+            interpolate(ρ, bidlevels, xᴰ, t) = begin
+                lower = ((ρ[t] - bidlevels[t][ih(t)])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xᴰ[ih(t)+1,t]
+                upper = ((bidlevels[t][ih(t)+1]-ρ[t])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xᴰ[ih(t),t]
+                return lower + upper
+            end
             # Variables
             # =======================================================
             # -------------------------------------------------------
-            #@recourse(model, maintenance_period[p in plants, t in hours], Bin)
+            @recourse(model, yᴴ[t = hours] >= 0)
+            @recourse(model, y⁺[t = hours] >= 0)
+            @recourse(model, y⁻[t = hours] >= 0)
             @recourse(model, 0 <= Q[p = plants, s = segments, t = hours] <= hydrodata[p].Q̄[s])
             @recourse(model, S[p = plants, t = hours] >= 0)
             @recourse(model, 0 <= M[p = plants, t = hours] <= hydrodata[p].M̄)
@@ -70,19 +89,18 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
             @expression(model, net_profit,
                         sum(ρ[t]*H[t]
                             for t = hours))
-            @objective(model, Max, net_profit)
+            # Intraday
+            @expression(model, intraday,
+                        sum(penalty(ξ,t)*y⁺[t] - reward(ξ,t)*y⁻[t]
+                            for t in hours))
+            # Define objective
+            @objective(model, Max, net_profit - intraday)
             # Constraints
             # ========================================================
-            # Match maintenance period with starting hour
-            # @constraint(model, maintenance_times[p in plants, t in hours],
-            #             maintenance_period[p,t] <= sum(maintenance_start[p,t′]
-            #                                            for t′ in max(1, t - hydrodata[p].Mt + 1 - 1):min(t+1,nhours(horizon))))
-            # Ensure that maintenance is finished
-            # @constraint(model, maintenance_finished[p in plants],
-            #             sum(maintenance_period[p,t] for t in hours) == hydrodata[p].Mt)
-            # Only allow three parallel maintenance efforts per hour
-            #@constraint(model, maintenance_concurrency[t in hours],
-            #            sum(maintenance_period[p,t] for p in plants) <= 3)
+            # Bid-dispatch links
+            @constraint(model, hourlybids[t = hours],
+                yᴴ[t] == interpolate(ρ, bidlevels, xᴰ, t) + xᴵ[t]
+            )
             # Pause production during maintenance hours
             @constraint(model, pause_production[p in plants, s in segments, t in hours],
                         Q[p,s,t] <= (1 - maintenance_period[p,t])*hydrodata[p].Q̄[s])
@@ -104,6 +122,10 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
             @constraint(model, production[t = hours],
                         H[t] == sum(hydrodata[p].μ[s]*Q[p,s,t]
                                     for p = plants, s = segments)
+                        )
+            # Load balance
+            @constraint(model, loadbalance[t = hours],
+                        yᴴ[t] - H[t] == y⁺[t] - y⁻[t]
                         )
             # Water flow: Discharge + Spillage
             Containers.@container [p = plants, t = hours] begin

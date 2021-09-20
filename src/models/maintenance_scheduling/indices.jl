@@ -2,6 +2,7 @@ struct MaintenanceSchedulingIndices <: AbstractModelIndices
     hours::Vector{Int}
     plants::Vector{Plant}
     segments::Vector{Int}
+    bids::Vector{Int}
 end
 plants(indices::MaintenanceSchedulingIndices) = indices.plants
 
@@ -12,5 +13,6 @@ function HydroModels.modelindices(data::MaintenanceSchedulingData, horizon::Hori
         error("No plants in given set of price areas and rivers")
     end
     segments = collect(1:2)
-    return MaintenanceSchedulingIndices(hours, plants, segments)
+    bids = collect(1:length(data.bidlevels[1]))
+    return MaintenanceSchedulingIndices(hours, plants, segments, bids)
 end

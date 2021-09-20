@@ -113,7 +113,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             # Intraday
             if intraday_trading
                 @expression(model, intraday,
-                            sum((penalty(ξ,α,t)*y⁺[t] + regulations.intradayfee) - (reward(ξ,β,t) - regulations.intradayfee)*y⁻[t]
+                            sum((penalty(ξ,t) + regulations.intradayfee)*y⁺[t] - (reward(ξ,t) - regulations.intradayfee)*y⁻[t]
                                 for t in hours))
             end
             # Value of stored water

@@ -9,6 +9,28 @@
     end
 end
 
+function StochasticPrograms.expected(ξ₁::MaintenanceSchedulingScenario, ξ₂::MaintenanceSchedulingScenario)
+    ρ = mean([ξ₁.ρ, ξ₂.ρ])
+    Q̃ = mean([ξ₁.Q̃, ξ₂.Q̃])
+    expected = MaintenanceSchedulingScenario(ρ, Q̃)
+    return ExpectedScenario(expected)
+end
+
+function penalty(scenario::MaintenanceSchedulingScenario, t)
+    if 8 <= t <= 12 || 17 <= t <= 24
+        return 1.15*scenario.ρ[t]
+    else
+        return 1.1*scenario.ρ[t]
+    end
+end
+function reward(scenario::MaintenanceSchedulingScenario, t)
+    if 8 <= t <= 12 || 17 <= t <= 24
+        return 0.85*scenario.ρ[t]
+    else
+        return 0.9*scenario.ρ[t]
+    end
+end
+
 @sampler RecurrentMaintenanceSchedulingSampler = begin
     date::Date
     plants::PlantCollection

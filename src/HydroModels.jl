@@ -29,6 +29,7 @@ export
     AbstractModelIndices,
     AbstractModelData,
     Horizon,
+    Resolution,
     PlantCollection,
     plants,
     nplants,
@@ -67,9 +68,15 @@ export
     power,
     revenue,
     totalrevenue,
-    nhours,
-    ndays,
-    nweeks,
+    num_hours,
+    num_days,
+    num_weeks,
+    num_periods,
+    water_volume,
+    marginal_production,
+    water_flow_time,
+    historic_flow,
+    overflow,
     DayAhead,
     WeekAhead
 
@@ -87,6 +94,7 @@ include("models/model.jl")
 include("models/day-ahead/DayAhead.jl")
 include("models/week-ahead/WeekAhead.jl")
 include("models/maintenance_scheduling/MaintenanceScheduling.jl")
+include("models/capacity_expansion/CapacityExpansion.jl")
 
 # Analysis
 include("productionplan.jl")

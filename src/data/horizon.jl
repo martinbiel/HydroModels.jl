@@ -1,29 +1,32 @@
 struct Horizon
-    nhours::Integer   # Number of hours in horizon
+    num_hours::Integer   # Number of hours in horizon
 
-    function Horizon(nhours::Integer)
-        @assert mod(nhours,24) == 0 "Horizon should be an even number of days"
-        return new(nhours)
+    function Horizon(num_hours::Integer)
+        @assert mod(num_hours,24) == 0 "Horizon should be an even number of days"
+        return new(num_hours)
     end
 end
 
-Base.:(==)(h1::Horizon,h2::Horizon) = h1.nhours == h2.nhours
-Base.:(<=)(h1::Horizon,h2::Horizon) = h1.nhours <= h2.nhours
-Base.:(>=)(h1::Horizon,h2::Horizon) = h1.nhours >= h2.nhours
+Base.:(==)(h1::Horizon,h2::Horizon) = h1.num_hours == h2.num_hours
+Base.:(<=)(h1::Horizon,h2::Horizon) = h1.num_hours <= h2.num_hours
+Base.:(>=)(h1::Horizon,h2::Horizon) = h1.num_hours >= h2.num_hours
 
 Day() = Horizon(24)
-Days(ndays::Integer) = Horizon(ndays*24)
+Days(num_days::Integer) = Horizon(num_days*24)
 Week() = Horizon(168)
-Weeks(nweeks::Integer) = Horizon(nweeks*168)
+Weeks(num_weeks::Integer) = Horizon(num_weeks*168)
+Year() = Horizon(8760)
+Years(num_years::Integer) = Horizon(num_years*8760)
 
-nhours(horizon::Horizon) = horizon.nhours
-ndays(horizon::Horizon) = div(horizon.nhours,24)
-nweeks(horizon::Horizon) = div(horizon.nhours,168)
+
+num_hours(horizon::Horizon) = horizon.num_hours
+num_days(horizon::Horizon) = div(horizon.num_hours, 24)
+num_weeks(horizon::Horizon) = div(horizon.num_hours, 168)
 
 function horizonstring(horizon::Horizon)
-    remaindays = div(mod(nhours(horizon),168),24)
+    remaindays = div(mod(num_hours(horizon),168),24)
     horizonstr = ""
-    weeks = nweeks(horizon)
+    weeks = num_weeks(horizon)
     if weeks > 0
         horizonstr *= string("(",weeks," week")
         if weeks > 1

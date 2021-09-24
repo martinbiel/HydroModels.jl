@@ -128,11 +128,11 @@ end
 
 function show(io::IO, hydromodel::StochasticHydroModel)
     if get(io, :multiline, false)
-        print(io,string("Stochastic Hydro Power Model : ", modelname(hydromodel), ", including ", length(plants(hydromodel.indices)), " power stations, over a ", nhours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)), " featuring ", num_scenarios(hydromodel.internalmodel), " scenarios")
+        print(io,string("Stochastic Hydro Power Model : ", modelname(hydromodel), ", including ", length(plants(hydromodel.indices)), " power stations, over a ", num_hours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)), " featuring ", num_scenarios(hydromodel.internalmodel), " scenarios")
     else
         println(io,string("Stochastic Hydro Power Model : ", modelname(hydromodel)))
         println(io,string("    including ", length(plants(hydromodel.indices)), " power stations"))
-        println(io,string("    over a ", nhours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)))
+        println(io,string("    over a ", num_hours(hydromodel.horizon), " hour horizon ", horizonstring(hydromodel.horizon)))
         println(io,string("    featuring ", num_scenarios(hydromodel.internalmodel), " scenarios"))
         println(io,"")
         showstatus(io,hydromodel)

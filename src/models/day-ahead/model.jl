@@ -18,29 +18,29 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             end
             @unpack hours, plants, bids, blockbids, blocks, hours_per_block = indices
             @unpack hydrodata, regulations, use_blockbids = data
-            active_blocks(t) = findall(A->in(t,A),hours_per_block)
+            active_blocks(t) = findall(A->in(t,A), hours_per_block)
             # Variables
             # ========================================================
-            @decision(model, xᴵ[t = hours] >= 0)
-            @decision(model, xᴰ[i = bids, t = hours] >= 0)
+            @decision(model, xᴵ[t in hours] >= 0)
+            @decision(model, xᴰ[i in bids, t = hours] >= 0)
             if use_blockbids
                 @decision(model, 0 <= xᴮ[i = blockbids, b = blocks] <= regulations.blocklimit)
             end
             # Constraints
             # ========================================================
             # Increasing bid curve
-            @constraint(model, bidcurve[i = bids[1:end-1], t = hours],
+            @constraint(model, bidcurve[i in bids[1:end-1], t in hours],
                 xᴰ[i,t] <= xᴰ[i+1,t]
             )
             # Maximal bids
             if use_blockbids
-                @constraint(model, maxhourlybids[t = hours],
+                @constraint(model, maxhourlybids[t in hours],
                     xᴵ[t] + xᴰ[bids[end],t] + sum(xᴮ[i,b]
                         for i in blockbids for b in active_blocks(t))
                             <= 2*sum(hydrodata[p].H̄ for p in plants)
                 )
             else
-                @constraint(model, maxhourlybids[t = hours],
+                @constraint(model, maxhourlybids[t in hours],
                     xᴵ[t] + xᴰ[bids[end],t] <= 2*sum(hydrodata[p].H̄ for p in plants)
                 )
             end
@@ -76,25 +76,25 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 upper = ((bidlevels[t][ih(t)+1]-ρ[t])/(bidlevels[t][ih(t)+1]-bidlevels[t][ih(t)]))*xᴰ[ih(t),t]
                 return lower + upper
             end
-            active_blocks(t) = findall(A->in(t,A),hours_per_block)
+            active_blocks(t) = findall(A->in(t,A), hours_per_block)
             # Variables
             # =======================================================
             # -------------------------------------------------------
-            @variable(model, yᴴ[t = hours] >= 0)
+            @variable(model, yᴴ[t in hours] >= 0)
             if use_blockbids
-                @variable(model, yᴮ[b = blocks] >= 0)
+                @variable(model, yᴮ[b in blocks] >= 0)
             end
             if intraday_trading
-                @variable(model, y⁺[t = hours] >= 0)
-                @variable(model, y⁻[t = hours] >= 0)
+                @variable(model, y⁺[t in hours] >= 0)
+                @variable(model, y⁻[t in hours] >= 0)
             end
-            @variable(model, 0 <= Q[p = plants, s = segments, t = hours] <= hydrodata[p].Q̄[s])
-            @variable(model, S[p = plants, t = hours] >= 0)
-            @variable(model, 0 <= M[p = plants, t = hours] <= hydrodata[p].M̄)
-            @variable(model, W[i = 1:nindices(water_value)])
-            @variable(model, H[t = hours] >= 0)
-            @variable(model, Qf[p = plants, t = hours] >= 0)
-            @variable(model, Sf[p = plants, t = hours] >= 0)
+            @variable(model, 0 <= Q[p in plants, s in segments, t in hours] <= Q̄(hydrodata, p, s))
+            @variable(model, S[p in plants, t in hours] >= 0)
+            @variable(model, 0 <= M[p in plants, t in hours] <= hydrodata[p].M̄)
+            @variable(model, W[i in 1:nindices(water_value)])
+            @variable(model, H[t in hours] >= 0)
+            @variable(model, Qf[p in plants, t in hours] >= 0)
+            @variable(model, Sf[p in plants, t in hours] >= 0)
 
             # Objectives
             # ========================================================
@@ -102,9 +102,9 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             if use_blockbids
                 @expression(model, net_profit,
                     sum((ρ[t]-regulations.dayaheadfee)*yᴴ[t]
-                        for t = hours)
+                        for t in hours)
                     + sum(length(hours_per_block[b])*(mean(ρ[hours_per_block[b]])-regulations.dayaheadfee)*yᴮ[b]
-                        for b = blocks))
+                        for b in blocks))
             else
                 @expression(model, net_profit,
                     sum((ρ[t]-regulations.dayaheadfee)*yᴴ[t]
@@ -128,17 +128,17 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             # Constraints
             # ========================================================
             # Bid-dispatch links
-            @constraint(model, hourlybids[t = hours],
+            @constraint(model, hourlybids[t in hours],
                 yᴴ[t] == interpolate(ρ, bidlevels, xᴰ, t) + xᴵ[t]
             )
             if use_blockbids
-                @constraint(model, bidblocks[b = blocks],
+                @constraint(model, bidblocks[b in blocks],
                     yᴮ[b] == sum(xᴮ[j,b]
                         for j in 1:ib(b)))
             end
 
             # Hydrological balance
-            @constraint(model, hydro_constraints[p = plants, t = hours],
+            @constraint(model, hydro_constraints[p in plants, t in hours],
                 # Previous reservoir content
                 M[p,t] == (t > 1 ? M[p,t-1] : hydrodata[p].M₀)
                 # Inflow
@@ -151,45 +151,45 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 - S[p,t]
             )
             # Production
-            @constraint(model, production[t = hours],
-                H[t] == sum(hydrodata[p].μ[s]*Q[p,s,t]
+            @constraint(model, production[t in hours],
+                H[t] == sum(μ(hydrodata, p, s) * Q[p,s,t]
                     for p in plants, s in segments)
             )
             # Load balance
             if intraday_trading
                 if use_blockbids
-                    @constraint(model, loadbalance[t = hours],
+                    @constraint(model, loadbalance[t in hours],
                         yᴴ[t] + sum(yᴮ[b] for b in active_blocks(t)) - H[t] == y⁺[t] - y⁻[t]
                     )
                 else
-                    @constraint(model, loadbalance[t = hours],
+                    @constraint(model, loadbalance[t in hours],
                         yᴴ[t] - H[t] == y⁺[t] - y⁻[t]
                     )
                 end
             else
                 if use_blockbids
-                    @constraint(model, loadbalance[t = hours],
+                    @constraint(model, loadbalance[t in hours],
                         yᴴ[t] + sum(yᴮ[b] for b in active_blocks(t)) == H[t]
                     )
                 else
-                    @constraint(model, loadbalance[t = hours],
+                    @constraint(model, loadbalance[t in hours],
                         yᴴ[t] == H[t]
                     )
                 end
             end
             # Water flow: Discharge + Spillage
-            Containers.@container [p = plants, t = hours] begin
+            Containers.@container [p in plants, t in hours] begin
                 if t - hydrodata[p].Rqh > 1
                     @constraint(model,
                                 Qf[p,t] == (hydrodata[p].Rqm/60)*sum(Q[p,s,t-(hydrodata[p].Rqh+1)]
-                                                                     for s = segments)
+                                                                     for s in segments)
                                 + (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                                              for s = segments)
+                                                              for s in segments)
                                 )
                 elseif t - hydrodata[p].Rqh > 0
                     @constraint(model,
                                 Qf[p,t] == (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                                                       for s = segments)
+                                                                       for s in segments)
                                 )
                 else
                     @constraint(model,
@@ -197,7 +197,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                                 )
                 end
             end
-            Containers.@container [p = plants,  t = hours] begin
+            Containers.@container [p in plants, t in hours] begin
                 if t - hydrodata[p].Rsh > 1
                     @constraint(model,
                                 Sf[p,t] == (hydrodata[p].Rsm/60)*S[p,t-(hydrodata[p].Rsh+1)]
@@ -214,7 +214,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 end
             end
             # Water value
-            @constraint(model, water_value_approximation[c = 1:ncuts(water_value)],
+            @constraint(model, water_value_approximation[c in 1:ncuts(water_value)],
                         sum(water_value[c][p]*M[p,nhours(horizon)]
                             for p in plants)
                         + sum(W[i]

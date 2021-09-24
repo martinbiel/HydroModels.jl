@@ -1,4 +1,4 @@
-@reexport module MaintenanceScheduling
+@reexport module CapacityExpansion
 
 # Standard library
 using Statistics
@@ -18,10 +18,10 @@ import HydroModels: modelindices
 using Plots: font, text, Shape
 
 export
-    MaintenanceSchedulingData,
-    MaintenanceSchedulingScenario,
-    RecurrentMaintenanceSchedulingSampler,
-    MaintenanceSchedulingModel
+    CapacityExpansionData,
+    CapacityExpansionScenario,
+    RecurrentCapacityExpansionSampler,
+    CapacityExpansionModel
 
 include("data.jl")
 include("scenarios.jl")

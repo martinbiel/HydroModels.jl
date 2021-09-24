@@ -2,24 +2,30 @@ River = Symbol
 Area = Int
 Plant = Symbol
 
-mutable struct HydroPlantData{T <: AbstractFloat, S}
+mutable struct HydroPlantData{T <: AbstractFloat}
     M₀::T                # Initial reservoir contents
     M̄::T                 # Maximum reservoir capacities
     H̄::T                 # Maximal production
-    Q̄::NTuple{S,T}       # Maximal discharge in each segment
-    μ::NTuple{S,T}       # Marginal production equivalents in each segment
+    Q̄::T                 # Maximal discharge
     S̱::T                 # Minimum spillage
-    Rqh::Int             # Discharge flow time in whole hours
-    Rqm::Int             # Discharge flow time in remaining minutes
-    Rsh::Int             # Spillage flow time in whole hours
-    Rsm::Int             # Spillage flow time in remaining minutes
+    Rq::Int              # Discharge flow time in minutes
+    Rs::Int              # Spillage flow time in minutes
     Mt::Int              # Maintenance time in whole hours
     Q̃::T                 # Yearly mean flow of each plant
     V::T                 # Local inflow
 
-    function (::Type{HydroPlantData})(M₀::AbstractFloat,M̄::AbstractFloat,H̄::AbstractFloat,Q̄::NTuple{S,<:AbstractFloat},μ::NTuple{S,<:AbstractFloat},S̱::AbstractFloat,Rgh::Integer,Rqm::Integer,Rsh::Integer,Rsm::Integer,Mt,Q̃::AbstractFloat,V::AbstractFloat) where S
-        T = promote_type(typeof(M₀),typeof(M̄),typeof(H̄),eltype(Q̄),eltype(μ),typeof(S̱),typeof(Q̃),typeof(V),Float32)
-        return new{T,S}(M₀,M̄,H̄,Q̄,μ,S̱,Rgh,Rqm,Rsh,Rsm,Mt,Q̃,V)
+    function HydroPlantData(M₀::AbstractFloat,
+                            M̄::AbstractFloat,
+                            H̄::AbstractFloat,
+                            Q̄::AbstractFloat,
+                            S̱::AbstractFloat,
+                            Rq::Integer,
+                            Rs::Integer,
+                            Mt::Integer,
+                            Q̃::AbstractFloat,
+                            V::AbstractFloat)
+        T = promote_type(typeof(M₀),typeof(M̄),typeof(H̄),eltype(Q̄),typeof(S̱),typeof(Q̃),typeof(V),Float32)
+        return new{T}(M₀,M̄,H̄,Q̄,S̱,Rq,Rs,Mt,Q̃,V)
     end
 end
 Base.eltype(::HydroPlantData{T}) where T <: AbstractFloat = T
@@ -32,13 +38,15 @@ struct HydroPlantCollection{T <: AbstractFloat, S}
     areas::Dict{Area,Vector{Plant}}         # Plants sorted according to price area
     # Parameters
     # ========================================================
-    plantdata::Dict{Plant,HydroPlantData{T,S}}   # Data for each plant
+    plantdata::Dict{Plant,HydroPlantData{T}}     # Data for each plant
+    segmenter::Segmenter{S}                      # Segmenter
     Qd::Dict{Plant,Vector{Plant}}                # All discharge outlets located downstream (including itself)
     Qu::Dict{Plant,Vector{Plant}}                # Discharge outlet(s) located directly upstream
     Sd::Dict{Plant,Vector{Plant}}                # Spillage outlets located downstream (including itself)
     Su::Dict{Plant,Vector{Plant}}                # Spillage outlet(s) located directly upstream
 
-    function HydroPlantCollection(plants::Dict{Plant,HydroPlantData{T,S}},
+    function HydroPlantCollection(segmenter::Segmenter{S},
+                                  plants::Dict{Plant,HydroPlantData{T}},
                                   Qd::Dict{Plant,Vector{Plant}},
                                   Qu::Dict{Plant,Vector{Plant}},
                                   Sd::Dict{Plant,Vector{Plant}},
@@ -47,13 +55,14 @@ struct HydroPlantCollection{T <: AbstractFloat, S}
                         Dict{River,Vector{Plant}}(),
                         Dict{Area,Vector{Plant}}(),
                         plants,
+                        segmenter,
                         Qd,
                         Qu,
                         Sd,
                         Su)
     end
 
-    function HydroPlantCollection(::Type{Segmenter{S}},
+    function HydroPlantCollection(segmenter::Segmenter{S},
                                   plantnames::Vector{String},
                                   Qlinks::Vector{Int},
                                   Slinks::Vector{Int},
@@ -71,7 +80,8 @@ struct HydroPlantCollection{T <: AbstractFloat, S}
         modeldata = new{T,S}(Vector{Plant}(),
                              Dict{River,Vector{Plant}}(),
                              Dict{Area,Vector{Plant}}(),
-                             Dict{Plant,HydroPlantData{T,S}}(),
+                             Dict{Plant,HydroPlantData{T}}(),
+                             segmenter,
                              Dict{Plant,Vector{Plant}}(),
                              Dict{Plant,Vector{Plant}}(),
                              Dict{Plant,Vector{Plant}}(),
@@ -80,16 +90,17 @@ struct HydroPlantCollection{T <: AbstractFloat, S}
         return modeldata
     end
 
-    function HydroPlantCollection(::Type{T},::Type{Segmenter{S}},plantfilename::String) where {T <: AbstractFloat, S}
+    function HydroPlantCollection(::Type{T}, segmenter::Segmenter{S}, plantfilename::String) where {T <: AbstractFloat, S}
         modeldata = new{T,S}(Vector{Plant}(),
                              Dict{River,Vector{Plant}}(),
                              Dict{Area,Vector{Plant}}(),
-                             Dict{Plant,HydroPlantData{T,S}}(),
+                             Dict{Plant,HydroPlantData{T}}(),
+                             segmenter,
                              Dict{Plant,Vector{Plant}}(),
                              Dict{Plant,Vector{Plant}}(),
                              Dict{Plant,Vector{Plant}}(),
                              Dict{Plant,Vector{Plant}}(),)
-        define_model_parameters(modeldata,plantfilename)
+        define_model_parameters(modeldata, plantfilename)
         return modeldata
     end
 end
@@ -122,22 +133,34 @@ function HydroPlantCollection(plantnames::Vector{String},
                               Mt::Vector{Int},
                               rivers::Vector{String},
                               areas::Vector{Area})
-    return HydroPlantCollection(Segmenter{2},plantnames,Qlinks,Slinks,H̄,Q̄,S̱,M̄,Q̃,Rq,Rs,Mt,rivers,areas)
+    return HydroPlantCollection(Segmenter{2}(), plantnames, Qlinks, Slinks, H̄, Q̄, S̱, M̄, Q̃, Rq, Rs, Mt, rivers, areas)
 end
 
 function HydroPlantCollection(plant_filename::String)
-    return HydroPlantCollection(Float64,Segmenter{2},plant_filename)
+    return HydroPlantCollection(Float64, Segmenter{2}(), plant_filename)
 end
 
-Base.getindex(collection::HydroPlantCollection,plant::Plant) = collection.plantdata[plant]
+Base.getindex(collection::HydroPlantCollection, plant::Plant) = collection.plantdata[plant]
 
-function define_plants!(collection::HydroPlantCollection,plantnames::Vector{String})
+function Q̄(collection::HydroPlantCollection, plant::Plant, s::Integer)
+    Q̄s, μs = segment(collection.segmenter, collection[plant].Q̄, collection[plant].H̄)
+    return Q̄s[s]
+end
+function μ(collection::HydroPlantCollection, plant::Plant, s::Integer)
+    Q̄s, μs = segment(collection.segmenter, collection[plant].Q̄, collection[plant].H̄)
+    return μs[s]
+end
+function %(collection::HydroPlantCollection, s::Integer)
+    return segment_percentage(collection.segmenter, s)
+end
+
+function define_plants!(collection::HydroPlantCollection, plantnames::Vector{String})
     for plantname in plantnames
         push!(collection.plants,Plant(filter(x->!isspace(x),plantname)))
     end
 end
 
-function define_rivers!(collection::HydroPlantCollection,rivernames::Vector{String})
+function define_rivers!(collection::HydroPlantCollection, rivernames::Vector{String})
     for (p,rivername) in enumerate(rivernames)
         plant = collection.plants[p]
         river = River(filter(x->!isspace(x),rivername))
@@ -148,7 +171,7 @@ function define_rivers!(collection::HydroPlantCollection,rivernames::Vector{Stri
     end
 end
 
-function define_areas!(collection::HydroPlantCollection,areas::Vector{Area})
+function define_areas!(collection::HydroPlantCollection, areas::Vector{Area})
     for (p,area) in enumerate(areas)
         plant = collection.plants[p]
         if !haskey(collection.areas,area)
@@ -227,19 +250,15 @@ function define_model_parameters(collection::HydroPlantCollection{T,S},
     w = Dict(zip(collection.plants,Vsf*Q̃))
 
     for i in 1:length(plantnames)
-        Q̄s,μs = segment(Segmenter{S},Q̄[i],H̄[i])
         p = collection.plants[i]
         V = calculate_inflow(p,w,collection.Qu[p])
         collection.plantdata[p] = HydroPlantData(δ*M̄[i],
                                                  M̄[i],
                                                  H̄[i],
-                                                 Q̄s,
-                                                 μs,
+                                                 Q̄[i],
                                                  S̱[i],
-                                                 floor(Int64,Rq[i]/60),
-                                                 mod(Rq[i],60),
-                                                 floor(Int64,Rs[i]/60),
-                                                 mod(Rs[i],60),
+                                                 Rq[i],
+                                                 Rs[i],
                                                  Mt[i],
                                                  Vsf*Q̃[i],
                                                  V)

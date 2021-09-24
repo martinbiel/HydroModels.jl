@@ -1,5 +1,6 @@
 include("rivers.jl")
 include("horizon.jl")
+include("resolution.jl")
 include("segmenter.jl")
 include("hydrodata.jl")
 include("water_value.jl")

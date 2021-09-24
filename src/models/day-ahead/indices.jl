@@ -10,8 +10,8 @@ end
 plants(indices::DayAheadIndices) = indices.plants
 
 function HydroModels.modelindices(data::DayAheadData, horizon::Horizon; areas::Vector{Area} = [0], rivers::Vector{River} = [:All])
-    hours = collect(1:nhours(horizon))
-    plants = plants_in_areas_and_rivers(hydrodata(data),areas,rivers)
+    hours = collect(1:num_hours(horizon))
+    plants = plants_in_areas_and_rivers(hydrodata(data), areas, rivers)
     if isempty(plants)
         error("No plants in given set of price areas and rivers")
     end

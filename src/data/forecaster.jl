@@ -56,13 +56,13 @@ end
 
 function forecast(forecaster::Forecaster{:price}, starting_price::T, month::Integer) where T <: AbstractFloat
     Flux.reset!(forecaster.network)
-    λ = Vector{T}(undef, 24)
+    λ = Vector{T}(undef, 25)
     λ[1] = starting_price
-    for i = 2:24
+    for i = 2:25
         input = vcat(scale(forecaster.scaling, λ[i-1]), i/24, month/12)
         λ[i] = forecaster.network(Float32.(input))[1]
     end
-    return λ
+    return λ[2:end]
 end
 
 function forecast(forecaster::Forecaster{:price}, month::Integer)
@@ -76,15 +76,15 @@ function forecast(forecaster::Forecaster{:price}, month::Integer)
     return λ
 end
 
-function forecast(forecaster::Forecaster{:flow}, starting_flows::Vector{T}, week::Int, plants::Vector{Plant}) where T <: AbstractFloat
+function forecast(forecaster::Forecaster{:flow}, starting_flows::Vector{T}, week::Int) where T <: AbstractFloat
     Flux.reset!(forecaster.network)
-    flows = Matrix{T}(undef, length(starting_flows), 7)
+    flows = Matrix{T}(undef, length(starting_flows), 8)
     flows[:,1] = starting_flows
-    for i = 2:7
+    for i = 2:8
         input = vcat([scale(forecaster.scaling, f) for f in flows[:,i-1]], i/7, week/52)
         flows[:,i] = forecaster.network(Float32.(input))[:]
     end
-    return flows
+    return flows[:, 2:end]
 end
 
 function forecast(forecaster::Forecaster{:flow}, week::Int)

@@ -110,3 +110,14 @@ function local_inflow_sequence(sequence::InflowSequence{N,P}, upstream_plants::D
     local_inflow_sequence = [local_inflows(sequence[d], upstream_plants) for d in 1:N]
     return InflowSequence(local_inflow_sequence)
 end
+
+function mean_flow(resolution::Resolution, Q̃::InflowSequence, t::Integer, p::Plant)
+    if resolution.hours_in_period < 24
+        hours_passed = t * resolution.hours_in_period
+        d = div(hours_passed,24) + 1
+        return Q̃[d][p]
+    end
+    days_in_period = div(resolution.hours_in_period, 24)
+    idx = (t - 1) * days_in_period + 1
+    return mean(Q̃[idx:idx+days_in_period-1])[p]
+end

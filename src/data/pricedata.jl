@@ -47,3 +47,8 @@ ncurves(pricedata::PriceData) = length(pricedata.curves)
 horizon(pricedata::PriceData,i::Integer) = horizon(first(pricedata))
 mean_price(pricedata::PriceData) = mean([mean_price(c) for (d,c) in pricedata.curves])
 Base.getindex(pricedata::PriceData, i::Integer) = pricedata.curves[i]
+
+function mean_price(resolution::Resolution, ρ::PriceCurve, t::Integer)
+    idx = (t - 1) * resolution.hours_in_period + 1
+    return mean(ρ[idx:idx+resolution.hours_in_period-1])
+end

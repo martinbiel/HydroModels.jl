@@ -16,9 +16,13 @@ struct CapacityExpansionData{T <: AbstractFloat} <: AbstractModelData
     end
 end
 
-function CapacityExpansionData(plantfilename::String; discount_rate::AbstractFloat = 0.05, investment_period::Integer = 40)
+function CapacityExpansionData(plantfilename::String, investment_levels::AbstractVector; kw...)
+    return CapacityExpansionData(HydroPlantCollection(plantfilename), investment_levels; kw...)
+end
+
+function CapacityExpansionData(plantfilename::String; kw...)
     investment_levels = collect(0.0:10:100.0)
-    return CapacityExpansionData(HydroPlantCollection(plantfilename), investment_levels; discount_rate = discount_rate, investment_period = investment_period)
+    return CapacityExpansionData(HydroPlantCollection(plantfilename), investment_levels; kw...)
 end
 
 function equivalent_cost(data::CapacityExpansionData, horizon::Horizon, level_index::Integer)

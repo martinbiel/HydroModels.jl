@@ -1,9 +1,9 @@
-function CapacityExpansionModel(data::CapacityExpansionData, scenarios::Vector{<:CapacityExpansionScenario}; kw...)
-    return StochasticHydroModel("Capacity expansion", HydroModels.Year(), data, CapacityExpansionModelDef, scenarios; kw...)
+function CapacityExpansionModel(data::CapacityExpansionData, scenarios::Vector{<:CapacityExpansionScenario}; horizon = HydroModels.Year(), kw...)
+    return StochasticHydroModel("Capacity expansion", horizon, data, CapacityExpansionModelDef, scenarios; kw...)
 end
 
-function CapacityExpansionModel(data::CapacityExpansionData, sampler::RecurrentCapacityExpansionSampler, n::Integer; kw...)
-    return StochasticHydroModel("Capacity expansion", HydroModels.Year(), data, CapacityExpansionModelDef, sampler, n; kw...)
+function CapacityExpansionModel(data::CapacityExpansionData, sampler::RecurrentCapacityExpansionSampler, n::Integer; horizon = HydroModels.Year(), kw...)
+    return StochasticHydroModel("Capacity expansion", horizon, data, CapacityExpansionModelDef, sampler, n; kw...)
 end
 
 function CapacityExpansionModelDef(horizon::Horizon, data::CapacityExpansionData, indices::CapacityExpansionIndices)
@@ -25,8 +25,8 @@ function CapacityExpansionModelDef(horizon::Horizon, data::CapacityExpansionData
             @decision(model, ΔH[p in plants] >= 0)
             # Objectives
             # ========================================================
-            # Minimize cost of expansion
-            @objective(model, Max, -sum(equivalent_cost(data, horizon, l) * investment_level[l] for l in levels))
+            # Minimize cost of expansion (in MEUR)
+            @objective(model, Max, -sum(equivalent_cost(data, horizon, l) * investment_level[l] for l in levels) / 1e6)
             # Constraints
             # ========================================================
             # Only choose on investment level
@@ -63,10 +63,10 @@ function CapacityExpansionModelDef(horizon::Horizon, data::CapacityExpansionData
             # ========================================================
             # Net profit
             @expression(model, net_profit,
-                        sum(ρ[t]*H[t]
+                        sum(HydroModels.mean_price(resolution, ρ, t)*H[t]
                             for t in periods))
-            # Define objective
-            @objective(model, Max, net_profit)
+            # Define objective (in MEUR)
+            @objective(model, Max, net_profit / 1e6)
             # Constraints
             # ========================================================
             # Capacity expansion
@@ -75,19 +75,19 @@ function CapacityExpansionModelDef(horizon::Horizon, data::CapacityExpansionData
             # Hydrological balance
             @constraint(model, hydro_constraints[p in plants, t in periods],
                         # Previous reservoir content
-                        M[p,t] == (t > 1 ? M[p,t-1] : hydrodata[p].M₀)
+                        M[p,t] == (t > 1 ? M[p,t-1] : water_volume(resolution, hydrodata[p].M₀))
                         # Inflow
                         + sum(Qf[i,t] for i in intersect(hydrodata.Qu[p],plants))
                         + sum(Sf[i,t] for i in intersect(hydrodata.Su[p],plants))
                         # Local inflow
-                        + V[div(t-1,24)+1][p]
+                        + HydroModels.mean_flow(resolution, V, t, p)
                         # Outflow
                         - sum(Q[p,s,t]
                               for s in segments)
                         - S[p,t]
                         )
             # Production
-            @constraint(model, production[t = periods],
+            @constraint(model, production[t in periods],
                         H[t] == sum(marginal_production(resolution, μ(hydrodata, p, s)) * Q[p,s,t]
                                     for p in plants, s in segments)
                         )

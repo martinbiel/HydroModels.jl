@@ -74,6 +74,8 @@ export
     num_periods,
     water_volume,
     marginal_production,
+    mean_price,
+    mean_flow,
     water_flow_time,
     historic_flow,
     overflow,

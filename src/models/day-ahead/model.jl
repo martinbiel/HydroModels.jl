@@ -122,7 +122,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             if simple_water_value
                 @expression(model, value_of_stored_water,
                             mean(ρ)*sum(M[p,num_hours(horizon)]*sum(marginal_production(Resolution(1), μ(hydrodata, i, 1))
-                                                                    for i in hdata.Qd[p])
+                                                                    for i in hydrodata.Qd[p])
                                        for p = plants))
             else
                 @expression(model, value_of_stored_water, -sum(W[i] for i in 1:nindices(water_value)))

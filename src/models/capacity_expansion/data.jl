@@ -25,18 +25,18 @@ function CapacityExpansionData(plantfilename::String; kw...)
     return CapacityExpansionData(HydroPlantCollection(plantfilename), investment_levels; kw...)
 end
 
-function equivalent_cost(data::CapacityExpansionData, horizon::Horizon, level_index::Integer)
-    C = data.investment_levels[level_index] * data.expansion_cost * 1e6
-    if iszero(C)
-        return C
-    end
+function equivalent_cost(data::CapacityExpansionData, horizon::Horizon)
+    # C = data.investment_levels[level_index] * data.expansion_cost * 1e6
+    # if iszero(C)
+    #     return C
+    # end
     r = data.discount_rate
     P = data.investment_period
     T = num_days(horizon)
     # Calculate equivalent rate
     rᴱ = (1 + r)^(T/365) - 1
     # Calculate equivalent cost
-    Cᴱ = C * rᴱ / (1 - (1 + rᴱ)^(-P * 365 / T))
+    Cᴱ = data.expansion_cost * rᴱ / (1 - (1 + rᴱ)^(-P * 365 / T))
     # Return equivalent cost
     return Cᴱ
 end

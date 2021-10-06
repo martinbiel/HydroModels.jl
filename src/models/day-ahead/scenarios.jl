@@ -9,6 +9,13 @@
     end
 end
 
+function StochasticPrograms.expected(ξ₁::DayAheadScenario, ξ₂::DayAheadScenario)
+    ρ = mean([ξ₁.ρ, ξ₂.ρ])
+    Q̃ = mean([ξ₁.Q̃, ξ₂.Q̃])
+    expected = DayAheadScenario(ρ, Q̃)
+    return ExpectedScenario(expected)
+end
+
 function penalty(scenario::DayAheadScenario, t)
     if 8 <= t <= 12 || 17 <= t <= 24
         return 1.15*scenario.ρ[t]

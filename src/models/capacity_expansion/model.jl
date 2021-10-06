@@ -21,19 +21,19 @@ function CapacityExpansionModelDef(horizon::Horizon, data::CapacityExpansionData
 
             # Variables
             # ========================================================
-            @decision(model, investment_level[l in levels], Bin)
+            @decision(model, 0 <= ΔH̄ <= 1000)
             @decision(model, ΔH[p in plants] >= 0)
             # Objectives
             # ========================================================
             # Minimize cost of expansion (in MEUR)
-            @objective(model, Max, -sum(equivalent_cost(data, horizon, l) * investment_level[l] for l in levels) / 1e6)
+            @objective(model, Max, -equivalent_cost(data, horizon) * ΔH̄)
             # Constraints
             # ========================================================
             # Only choose on investment level
-            @constraint(model, one_level, sum(investment_level[l] for l in levels) == 1)
+            #@constraint(model, one_level, sum(investment_level[l] for l in levels) == 1)
             # Distribute chosen expansion over plants
             @constraint(model, distribute_expansion,
-                        sum(ΔH[p] for p in plants) == sum(investment_levels[l] * investment_level[l] for l in levels))
+                        sum(ΔH[p] for p in plants) == ΔH̄)
         end
         # Second stage
         # =======================================================

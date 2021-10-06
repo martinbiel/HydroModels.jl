@@ -152,9 +152,9 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             )
             # Production
             @constraint(model, production[t in hours],
-                H[t] == sum(μ(hydrodata, p, s) * Q[p,s,t]
-                    for p in plants, s in segments)
-            )
+                        H[t] == sum(marginal_production(Resolution(1), μ(hydrodata, p, s)) * Q[p,s,t]
+                                    for p in plants, s in segments)
+                        )
             # Load balance
             if intraday_trading
                 if use_blockbids
@@ -178,44 +178,21 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 end
             end
             # Water flow: Discharge + Spillage
-            Containers.@container [p in plants, t in hours] begin
-                if t - hydrodata[p].Rqh > 1
-                    @constraint(model,
-                                Qf[p,t] == (hydrodata[p].Rqm/60)*sum(Q[p,s,t-(hydrodata[p].Rqh+1)]
-                                                                     for s in segments)
-                                + (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                                              for s in segments)
-                                )
-                elseif t - hydrodata[p].Rqh > 0
-                    @constraint(model,
-                                Qf[p,t] == (1-hydrodata[p].Rqm/60)*sum(Q[p,s,t-hydrodata[p].Rqh]
-                                                                       for s in segments)
-                                )
-                else
-                    @constraint(model,
-                                Qf[p,t] == 0
-                                )
-                end
-            end
-            Containers.@container [p in plants, t in hours] begin
-                if t - hydrodata[p].Rsh > 1
-                    @constraint(model,
-                                Sf[p,t] == (hydrodata[p].Rsm/60)*S[p,t-(hydrodata[p].Rsh+1)]
-                                + (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
-                                )
-                elseif t - hydrodata[p].Rsh > 0
-                    @constraint(model,
-                                Sf[p,t] == (1-hydrodata[p].Rsm/60)*S[p,t-hydrodata[p].Rsh]
-                                )
-                else
-                    @constraint(model,
-                                Sf[p,t] == 0
-                                )
-                end
-            end
+            @constraint(model, discharge_flow_time[p in plants, t in hours],
+                        Qf[p,t] == (t - water_flow_time(Resolution(1), hydrodata[p].Rq) > 0 ?
+                        overflow(Resolution(1), hydrodata[p].Rq) * sum(Q[p,s,t-water_flow_time(Resolution(1), hydrodata[p].Rq)]
+                                                                    for s in segments) : 0.0)
+                        + (t - water_flow_time(Resolution(1), hydrodata[p].Rq) > 1 ?
+                        historic_flow(Resolution(1), hydrodata[p].Rq)*sum(Q[p,s,t-(water_flow_time(Resolution(1), hydrodata[p].Rq)+1)]
+                                                                       for s in segments) : 0.0))
+            @constraint(model, spillage_flow_time[p in plants, t in hours],
+                        Sf[p,t] == (t - water_flow_time(Resolution(1), hydrodata[p].Rs) > 0 ?
+                        overflow(Resolution(1), hydrodata[p].Rs) * S[p,t-water_flow_time(Resolution(1), hydrodata[p].Rs)] : 0.0)
+                        + (t - water_flow_time(Resolution(1), hydrodata[p].Rs) > 1 ?
+                        historic_flow(Resolution(1), hydrodata[p].Rs)*S[p,t-(water_flow_time(Resolution(1), hydrodata[p].Rq)+1)] : 0.0))
             # Water value
             @constraint(model, water_value_approximation[c in 1:ncuts(water_value)],
-                        sum(water_value[c][p]*M[p,nhours(horizon)]
+                        sum(water_value[c][p]*M[p,num_hours(horizon)]
                             for p in plants)
                         + sum(W[i]
                               for i in cut_indices(water_value[c])) >= cut_lb(water_value[c]))

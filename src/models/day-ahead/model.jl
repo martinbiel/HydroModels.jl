@@ -26,6 +26,10 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             if use_blockbids
                 @decision(model, 0 <= xᴮ[i = blockbids, b = blocks] <= regulations.blocklimit)
             end
+            # Objectives
+            # ========================================================
+            # Dummy first-stage objective in order to use Max sense
+            @objective(model, Max, 0)
             # Constraints
             # ========================================================
             # Increasing bid curve
@@ -54,7 +58,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                 data = data
             end
             @unpack hours, plants, segments, blocks, hours_per_block = indices
-            @unpack hydrodata, water_value, regulations, intraday_trading, simple_water_value, penalty_percentage, use_blockbids, bidlevels = data
+            @unpack hydrodata, water_value, regulations, intraday_trading, penalty_percentage, use_blockbids, bidlevels = data
             α = penalty_percentage
             β = α == 0.0 ? 0.0 : 1/α
             @uncertain ρ Q̃ from ξ::DayAheadScenario
@@ -91,9 +95,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
             @variable(model, 0 <= Q[p in plants, s in segments, t in hours] <= Q̄(hydrodata, p, s))
             @variable(model, S[p in plants, t in hours] >= 0)
             @variable(model, 0 <= M[p in plants, t in hours] <= hydrodata[p].M̄)
-            if !simple_water_value
-                @variable(model, W[i in 1:nindices(water_value)])
-            end
+            @variable(model, W[i in 1:nindices(water_value)])
             @variable(model, H[t in hours] >= 0)
             @variable(model, Qf[p in plants, t in hours] >= 0)
             @variable(model, Sf[p in plants, t in hours] >= 0)
@@ -119,14 +121,7 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                                 for t in hours))
             end
             # Value of stored water
-            if simple_water_value
-                @expression(model, value_of_stored_water,
-                            mean(ρ)*sum(M[p,num_hours(horizon)]*sum(marginal_production(Resolution(1), μ(hydrodata, i, 1))
-                                                                    for i in hydrodata.Qd[p])
-                                       for p = plants))
-            else
-                @expression(model, value_of_stored_water, -sum(W[i] for i in 1:nindices(water_value)))
-            end
+            @expression(model, value_of_stored_water, -sum(W[i] for i in 1:nindices(water_value)))
             # Define objective
             if intraday_trading
                 @objective(model, Max, net_profit - intraday + value_of_stored_water)
@@ -200,13 +195,11 @@ function DayAheadModelDef(horizon::Horizon, data::DayAheadData, indices::DayAhea
                         + (t - water_flow_time(Resolution(1), hydrodata[p].Rs) > 1 ?
                         historic_flow(Resolution(1), hydrodata[p].Rs)*S[p,t-(water_flow_time(Resolution(1), hydrodata[p].Rq)+1)] : 0.0))
             # Water value
-            if !simple_water_value
-                @constraint(model, water_value_approximation[c in 1:ncuts(water_value)],
-                            sum(water_value[c][p]*M[p,num_hours(horizon)]
-                                for p in plants)
-                            + sum(W[i]
-                                  for i in cut_indices(water_value[c])) >= cut_lb(water_value[c]))
-            end
+            @constraint(model, water_value_approximation[c in 1:ncuts(water_value)],
+                        sum(water_value[c][p]*M[p,num_hours(horizon)]
+                            for p in plants)
+                        + sum(W[i]
+                              for i in cut_indices(water_value[c])) >= cut_lb(water_value[c]))
         end
     end
     return stochasticmodel

@@ -16,7 +16,6 @@ struct DayAheadData{T <: AbstractFloat} <: AbstractModelData
     water_value::PolyhedralWaterValue{T}
     regulations::TradeRegulations{T}
     intraday_trading::Bool
-    simple_water_value::Bool
     penalty_percentage::Float64
     use_blockbids::Bool
     bidlevels::Vector{Vector{T}}
@@ -26,16 +25,15 @@ struct DayAheadData{T <: AbstractFloat} <: AbstractModelData
                           regulations::TradeRegulations{T},
                           bidlevels::Vector{Vector{T}};
                           intraday_trading::Bool = true,
-                          simple_water_value::Bool = false,
                           penalty_percentage::Float64 = 0.0,
                           use_blockbids::Bool = true) where T <: AbstractFloat
         length(bidlevels) == 24 || error("Supply exactly 24 bidlevel sets")
         all(length.(bidlevels) .== length(bidlevels[1])) || error("All bidlevel sets must be of the same length.")
-        return new{T}(plantdata, water_value, regulations, intraday_trading, simple_water_value, penalty_percentage, use_blockbids, bidlevels)
+        return new{T}(plantdata, water_value, regulations, intraday_trading, penalty_percentage, use_blockbids, bidlevels)
     end
 end
 
-function DayAheadData(plantfilename::String, watervalue_filename, bidlevelsets::AbstractMatrix; intraday_trading = true, simple_water_value = false, penalty_percentage = 0.0, use_blockbids = true)
+function DayAheadData(plantfilename::String, watervalue_filename, bidlevelsets::AbstractMatrix; intraday_trading = true, penalty_percentage = 0.0, use_blockbids = true)
     size(bidlevelsets, 2) == 24 || error(" ")
     plantdata = HydroPlantCollection(plantfilename)
     water_value = PolyhedralWaterValue(watervalue_filename)
@@ -45,7 +43,7 @@ function DayAheadData(plantfilename::String, watervalue_filename, bidlevelsets::
         prepend!(bidlevels[i], regulations.lowerorderlimit)
         push!(bidlevels[i], regulations.upperorderlimit)
     end
-    DayAheadData(plantdata, water_value, regulations, bidlevels, intraday_trading = intraday_trading, simple_water_value = simple_water_value, penalty_percentage = penalty_percentage, use_blockbids = use_blockbids)
+    DayAheadData(plantdata, water_value, regulations, bidlevels, intraday_trading = intraday_trading, penalty_percentage = penalty_percentage, use_blockbids = use_blockbids)
 end
 
 function DayAheadData(plantfilename::String, watervalue_filename, bidlevels::AbstractVector; intraday_trading = true, use_blockbids = true)

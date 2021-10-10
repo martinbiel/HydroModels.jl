@@ -29,8 +29,6 @@ function CapacityExpansionModelDef(horizon::Horizon, data::CapacityExpansionData
             @objective(model, Max, -equivalent_cost(data, horizon) * ΔH̄)
             # Constraints
             # ========================================================
-            # Only choose on investment level
-            #@constraint(model, one_level, sum(investment_level[l] for l in levels) == 1)
             # Distribute chosen expansion over plants
             @constraint(model, distribute_expansion,
                         sum(ΔH[p] for p in plants) == ΔH̄)
@@ -50,9 +48,6 @@ function CapacityExpansionModelDef(horizon::Horizon, data::CapacityExpansionData
             # Variables
             # =======================================================
             # -------------------------------------------------------
-            @recourse(model, yᴴ[t in periods] >= 0)
-            @recourse(model, y⁺[t in periods] >= 0)
-            @recourse(model, y⁻[t in periods] >= 0)
             @recourse(model, Q[p in plants, s in segments, t in periods] >= 0)
             @recourse(model, S[p in plants, t in periods] >= 0)
             @recourse(model, 0 <= M[p in plants, t in periods] <= water_volume(resolution, hydrodata[p].M̄))

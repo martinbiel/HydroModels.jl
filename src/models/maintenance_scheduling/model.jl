@@ -54,7 +54,7 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
                 data = data
             end
             @unpack hours, plants, segments = indices
-            @unpack hydrodata, bidlevels = data
+            @unpack hydrodata, bidlevels, reschedule = data
             @uncertain ρ Q̃ from ξ::MaintenanceSchedulingScenario
             V = local_inflows(Q̃, hydrodata.Qu)
             # Auxilliary functions
@@ -70,6 +70,9 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
             # Variables
             # =======================================================
             # -------------------------------------------------------
+            if reschedule
+                @recourse(model, new_schedule[p in plants, t in hours], Bin)
+            end
             @recourse(model, yᴴ[t in hours] >= 0)
             @recourse(model, y⁺[t in hours] >= 0)
             @recourse(model, y⁻[t in hours] >= 0)
@@ -93,13 +96,30 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
             @objective(model, Max, net_profit - intraday)
             # Constraints
             # ========================================================
+            if reschedule
+                # Maintenance period should be a consecutive period
+                @constraint(model, new_maintenance_times[p in plants, t in hours],
+                            new_schedule[p,t] - (t > 2 ? new_schedule[p,t-1] : 0) <= ((t + hydrodata[p].Mt - 1) <= num_hours(horizon) ? new_schedule[p,t+hydrodata[p].Mt-1] : 0))
+                # Ensure maintenance is finished
+                @constraint(model, new_maintenance_finished[p in plants],
+                            sum(new_schedule[p,t] for t in hours) == hydrodata[p].Mt)
+                # New schedule can only differ by an hour
+                @constraint(model, reschedule_constraint[p in plants, t in hours],
+                            new_schedule[p,t] <= sum(maintenance_period[p,tt] for tt in max(1,t-1):1:min(num_hours(horizon),t+1)))
+            end
             # Bid-dispatch links
             @constraint(model, hourlybids[t in hours],
                 yᴴ[t] == interpolate(ρ, bidlevels, xᴰ, t) + xᴵ[t]
             )
-            # Pause production during maintenance hours
-            @constraint(model, pause_production[p in plants, s in segments, t in hours],
-                        Q[p,s,t] <= (1 - maintenance_period[p,t])*Q̄(hydrodata, p, s))
+            if reschedule
+                # Pause production during new maintenance hours
+                @constraint(model, pause_production[p in plants, s in segments, t in hours],
+                            Q[p,s,t] <= (1 - new_schedule[p,t])*Q̄(hydrodata, p, s))
+            else
+                # Pause production during maintenance hours
+                @constraint(model, pause_production[p in plants, s in segments, t in hours],
+                            Q[p,s,t] <= (1 - maintenance_period[p,t])*Q̄(hydrodata, p, s))
+            end
             # Hydrological balance
             @constraint(model, hydro_constraints[p in plants, t in hours],
                         # Previous reservoir content
@@ -115,7 +135,7 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
                         - S[p,t]
                         )
             # Production
-            @constraint(model, production[t in periods],
+            @constraint(model, production[t in hours],
                         H[t] == sum(marginal_production(Resolution(1), μ(hydrodata, p, s)) * Q[p,s,t]
                                     for p in plants, s in segments)
                         )
@@ -124,14 +144,14 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
                         yᴴ[t] - H[t] == y⁺[t] - y⁻[t]
                         )
             # Water flow: Discharge + Spillage
-            @constraint(model, discharge_flow_time[p in plants, t in periods],
+            @constraint(model, discharge_flow_time[p in plants, t in hours],
                         Qf[p,t] == (t - water_flow_time(Resolution(1), hydrodata[p].Rq) > 0 ?
                         overflow(Resolution(1), hydrodata[p].Rq) * sum(Q[p,s,t-water_flow_time(Resolution(1), hydrodata[p].Rq)]
                                                                     for s in segments) : 0.0)
                         + (t - water_flow_time(Resolution(1), hydrodata[p].Rq) > 1 ?
                         historic_flow(Resolution(1), hydrodata[p].Rq)*sum(Q[p,s,t-(water_flow_time(Resolution(1), hydrodata[p].Rq)+1)]
                                                                        for s in segments) : 0.0))
-            @constraint(model, spillage_flow_time[p in plants, t in periods],
+            @constraint(model, spillage_flow_time[p in plants, t in hours],
                         Sf[p,t] == (t - water_flow_time(Resolution(1), hydrodata[p].Rs) > 0 ?
                         overflow(Resolution(1), hydrodata[p].Rs) * S[p,t-water_flow_time(Resolution(1), hydrodata[p].Rs)] : 0.0)
                         + (t - water_flow_time(Resolution(1), hydrodata[p].Rs) > 1 ?

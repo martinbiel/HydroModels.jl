@@ -86,7 +86,7 @@ function MaintenanceSchedulingModelDef(horizon::Horizon, data::MaintenanceSchedu
             # ========================================================
             # Net profit
             @expression(model, net_profit,
-                        sum(ρ[t]*H[t]
+                        sum(ρ[t]*yᴴ[t]
                             for t in hours))
             # Intraday
             @expression(model, intraday,
